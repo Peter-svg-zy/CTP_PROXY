@@ -1,10 +1,11 @@
-import numpy as np
-import pandas as pd
 import Gobal_Param as g
-"""本案例以15分钟k线为例，核心思想：突破一个周期内的布林上下轨顺势而为，下跌止损，让利润奔腾"""
+
+
+"""本案例以15分钟k线为例，核心思想：突破周期内的布林上下轨顺势而为，下跌止损，让利润奔腾"""
 #策略固定参数
 period=88
 num_std=2
+
 
 def bollinger_bands(close,period,num_std):
     """计算布林上下轨道
@@ -34,11 +35,11 @@ class AberrationStrategy:
     data为存储bar的列表，包含close列
     return 返回交易信号，买，卖。平仓
     """
-    def __init__(self,close,period,num_std):
-        self.close = close
+    def __init__(self,period,num_std):
         self.period=period
         self.num_std = num_std
         self.position=None #持仓信号，0: 无持仓, 1: 多头, -1: 空头
+        self.sign=None     #买/卖信号
 
     def generate_signals(self,data):
         df=data.copy()#浅拷贝
@@ -100,5 +101,9 @@ class AberrationStrategy:
         return df, self.sign
 
 
+if __name__=='__main__':
+ data=g.bar15_list #data为15分钟k线列表
+ abstagey=AberrationStrategy(period=period,num_std=num_std)
+ df,sign=abstagey.generate_signals(data)
 
 
