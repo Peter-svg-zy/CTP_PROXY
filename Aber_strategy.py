@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import Gobal_Param as g
+import Global_Param as g
 """
 本案例以15分钟k线为例，核心思想：突破一个周期内的布林上下轨顺势而为，下跌止损，让利润奔腾
 从0开始搭建简易版策略实现，以simnow虚拟盘行情进行交易

@@ -1,4 +1,4 @@
-import Gobal_Param as g
+import Global_Param_test as g
 
 
 """
