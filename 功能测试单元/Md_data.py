@@ -12,7 +12,7 @@ from CTP_API import thostmduserapi as mdapi
 import Global_Param as g
 from function import *
 
-"""仅实现行情登录功能"""
+"""实现获取合约行情功能"""
 
 
 # 创建回调接口spi
@@ -42,6 +42,15 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
             print('行情连接失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
         else:
             print('行情账户登录成功！')
+
+        # 登录成功后，可以在此处取消注释来订阅行情
+        # g.subID = ["FG266", "SA266", 'au2609', 'sc2609']
+        # ret = self.mduserapi.SubscribeMarketData([id.encode('utf-8') for id in g.subID], len(g.subID))
+        # if ret == 0:
+        #     print('发送订阅合约请求成功！')
+        # else:
+        #     print('发送订阅合约请求失败！')
+        #     judge_ret(ret)
 
 
 class CTP_MdLogin(object):
