@@ -49,7 +49,7 @@ class CTP_MdLogin(object):
         pass
 
     def connect_to_md(self):
-        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建api实例
+        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('./con_file/')  # 创建api实例
         self.mduserspi = CFtdcMdSpi(self.mduserapi)  # spi实例
         g.mduserapi = self.mduserapi
         g.mduserspi = self.mduserspi
@@ -61,7 +61,7 @@ class CTP_MdLogin(object):
         # API正式启动，dll底层会自动去连上面注册的地址
         self.mduserapi.Init()
 
-        # 【关键修复3】：将 Join() 放入独立线程，专门用于维持 CTP 网络通信
+        # 将 Join() 放入独立线程，专门用于维持 CTP 网络通信
         ctp_thread = threading.Thread(target=self.mduserapi.Join)
         ctp_thread.daemon = True  # 设置为守护线程，主线程退出时它也会自动退出
         ctp_thread.start()
