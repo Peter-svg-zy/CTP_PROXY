@@ -28,7 +28,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         loginfield.UserID = g.investorID
         loginfield.Password = g.password
 
-        ret = self.mduserapi.ReqUserLogin(loginfield, 0)
+        ret = self.mduserapi.ReqUserLogin(loginfield, 0)   # 调用mduserapi的用户登录接口
         if ret == 0:
             print('发送用户登录行情请求成功')
         else:
@@ -43,14 +43,24 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         else:
             print('行情账户登录成功！')
 
-        # 登录成功后，可以在此处取消注释来订阅行情
-        # g.subID = ["FG266", "SA266", 'au2609', 'sc2609']
-        # ret = self.mduserapi.SubscribeMarketData([id.encode('utf-8') for id in g.subID], len(g.subID))
-        # if ret == 0:
-        #     print('发送订阅合约请求成功！')
-        # else:
-        #     print('发送订阅合约请求失败！')
-        #     judge_ret(ret)
+    def Subscribedata(self):
+        """行情订阅，调用mduserapi的SubscribeMarkData接口"""
+        ret = self.mduserapi.SubscribeMarketData([id.encode('utf-8') for id in g.subID], len(g.subID))
+        if ret == 0:
+            print('获取行情订阅成功')
+        else:
+            judge_ret(ret)
+    def OnRspSubMarketData(self, pSpecificInstrument, pRspInfo, nRequestID, bIsLast):
+        """SubscribeMarketData的回调接口，返回订阅合约代码，报错信息
+           nRequestID：返回用户操作请求的ID，该ID 由用户在操作请求时指定这里是0
+           bIsLast：指示该次返回是否为针对nRequestID的最后一次返回"""
+        if pRspInfo is not None and pRspInfo.ErrorID!=0:
+            print('订阅行情失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
+        else:
+            print("订阅合约成功，合约为代码为：{}".format(pSpecificInstrument.InstrumentID))
+        if bIsLast:
+            print('传送数据至策略模块')
+
 
 
 class CTP_MdLogin(object):
@@ -70,7 +80,7 @@ class CTP_MdLogin(object):
         # API正式启动，dll底层会自动去连上面注册的地址
         self.mduserapi.Init()
 
-        # 【关键修复3】：将 Join() 放入独立线程，专门用于维持 CTP 网络通信
+        # 将 Join() 放入独立线程，专门用于维持 CTP 网络通信
         ctp_thread = threading.Thread(target=self.mduserapi.Join)
         ctp_thread.daemon = True  # 设置为守护线程，主线程退出时它也会自动退出
         ctp_thread.start()
