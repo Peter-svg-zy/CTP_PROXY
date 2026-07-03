@@ -38,7 +38,7 @@ productInfo_fileName = './con_file/productInfo.ini'
 
 
 # 其他信息
-subID = []
+subID = ['au2609']
 # 查询信号，用于检查是否查询完成，true代表正在查询
 qry_flag = True
 

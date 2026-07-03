@@ -3,6 +3,8 @@ import sys
 import time
 import threading
 
+import idna
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
@@ -28,7 +30,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         loginfield.UserID = g.investorID
         loginfield.Password = g.password
 
-        ret = self.mduserapi.ReqUserLogin(loginfield, 0)   # 调用mduserapi的用户登录接口
+        ret = self.mduserapi.ReqUserLogin(loginfield, 0)  # 调用mduserapi的用户登录接口
         if ret == 0:
             print('发送用户登录行情请求成功')
         else:
@@ -43,18 +45,18 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         else:
             print('行情账户登录成功！')
 
-    def Subscribedata(self):
         """行情订阅，调用mduserapi的SubscribeMarkData接口"""
         ret = self.mduserapi.SubscribeMarketData([id.encode('utf-8') for id in g.subID], len(g.subID))
         if ret == 0:
             print('获取行情订阅成功')
         else:
             judge_ret(ret)
+
     def OnRspSubMarketData(self, pSpecificInstrument, pRspInfo, nRequestID, bIsLast):
         """SubscribeMarketData的回调接口，返回订阅合约代码，报错信息
            nRequestID：返回用户操作请求的ID，该ID 由用户在操作请求时指定这里是0
            bIsLast：指示该次返回是否为针对nRequestID的最后一次返回"""
-        if pRspInfo is not None and pRspInfo.ErrorID!=0:
+        if pRspInfo is not None and pRspInfo.ErrorID != 0:
             print('订阅行情失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
         else:
             print("订阅合约成功，合约为代码为：{}".format(pSpecificInstrument.InstrumentID))
@@ -62,8 +64,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
             print('传送数据至策略模块')
 
 
-
-class CTP_MdLogin(object):
+class CTP_Md(object):
     def __init__(self, **kwargs):
         pass
 
@@ -86,9 +87,10 @@ class CTP_MdLogin(object):
         ctp_thread.start()
 
 
+
 if __name__ == '__main__':
-    ctp_login = CTP_MdLogin()
-    ctp_login.connect_to_md()
+    ctp_md = CTP_Md()
+    ctp_md.connect_to_md()
 
     # --- 在这里继续执行你的后续业务代码 ---
     print("CTP 行情线程已启动，主线程继续执行...")
