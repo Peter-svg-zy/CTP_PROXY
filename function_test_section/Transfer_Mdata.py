@@ -2,18 +2,18 @@ import os
 import sys
 import time
 import threading
-from StrategyFloder import Stragety1
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 # 路径修改完成后，再导入自定义模块
 from CTP_API import thostmduserapi as mdapi
+from StrategyFloder import Stragety1
 import Global_Param as g
 from function import *
 
 
-"""实现传递tick数据到策略功能"""
+"""实现传递tick数据到策略功能,对应上一级目录下StrategyFloder的stragety1演示策略"""
 
 
 # 创建回调接口spi
@@ -80,10 +80,8 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
 
 class CTP_Md(object):
     def __init__(self, **kwargs):
-          self.stragety1=Stragety1.strategy1()
+          g.strategy_map[1] = Stragety1.strategy1()
           init_subID()
-
-          pass
 
     def connect_to_md(self):
         self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建api实例
