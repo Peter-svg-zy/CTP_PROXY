@@ -38,7 +38,7 @@ class strategy1:
             self.open_flag = 0
         def onQuote(self):
            #strategy1.Aberration()
-           print(f'策略1：{self.market_data.InstrumentID}')
+           # print(f'策略1：{self.market_data.InstrumentID}')
            self.market_data_lock.release_lock()
 
 
