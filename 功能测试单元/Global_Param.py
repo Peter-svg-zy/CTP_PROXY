@@ -20,7 +20,7 @@ broker_name = 'simnow模拟7*24小时'
 investorID = ''
 password = ''
 broker_id = '9999'
-market_server_front = 'tcp://182.254.243.31:30011'
+market_server_front = 'tcp://182.254.243.31:40011'
 trade_server_front = 'tcp://182.254.243.31:40001'
 appID = 'simnow_client_test'
 authcode = '0000000000000000'
@@ -38,7 +38,7 @@ productInfo_fileName = './con_file/productInfo.ini'
 
 
 # 其他信息
-subID = ['au2609']
+subID = []
 # 查询信号，用于检查是否查询完成，true代表正在查询
 qry_flag = True
 
