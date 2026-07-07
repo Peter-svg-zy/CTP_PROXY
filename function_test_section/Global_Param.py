@@ -2,13 +2,14 @@ import configparser
 import json
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
+import os
 # 账户信息
 # simnow
 import pandas as pd
-#
+
 # broker_name = 'simnow模拟'
-# investorID = ''
-# password = ''
+# investorID = '264168'
+# password = 'zy20010528@'
 # broker_id = '9999'
 # market_server_front = 'tcp://182.254.243.31:30011'
 # trade_server_front = 'tcp://182.254.243.31:30001'
@@ -24,7 +25,7 @@ market_server_front = 'tcp://182.254.243.31:40011'
 trade_server_front = 'tcp://182.254.243.31:40001'
 appID = 'simnow_client_test'
 authcode = '0000000000000000'
-productInfo_fileName = './con_file/productInfo.ini'
+productInfo_fileName = '../con_file/productInfo.ini'
 
 # broker_name = 'ws'
 # investorID = '02'
@@ -75,6 +76,7 @@ ExchangeID = {}
 # 合约手续费和保证金等
 productInfo = configparser.ConfigParser()
 productInfo.read(productInfo_fileName, encoding='utf-8')
+
 
 # 读取json文件
 try:

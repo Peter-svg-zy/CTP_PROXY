@@ -3,7 +3,7 @@ import Global_Param_test as g
 
 """
 本案例以15分钟k线为例，核心思想：突破周期内的布林上下轨顺势而为，下跌止损，让利润奔腾
-纯示例代码，展示Aberration逻辑,简单实现策略见test.py
+纯示例代码，展示Aberration逻辑
 """
 
 #策略固定参数

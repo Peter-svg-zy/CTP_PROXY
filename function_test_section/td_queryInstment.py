@@ -15,7 +15,9 @@ import Global_Param as g
 from function import *
 
 
-"""实现查询合约功能，涉及接口ReqQryInstrument函数以及回调(OnRspQryInstrument)函数，把查询到的合约以及交易所代码放入con_file文件夹下的ExchangeID.json"""
+"""实现查询合约功能，涉及接口ReqQryInstrument函数以及回调(OnRspQryInstrument)函数，把查询到的合约以及交易所代码放入con_file文件夹下的ExchangeID.json
+   后续可以改造为批量定时任务
+"""
 
 
 # 创建回调接口spi
@@ -210,228 +212,6 @@ class CTraderSpi(tdapi.CThostFtdcTraderSpi):
                 f.write(data)
             print('查询合约完成')
 
-    def OnRspQryInvestorPosition(self, pInvestorPosition, pRspInfo, nRequestID, bIsLast):
-        # try:
-        #     positionName = '{}_{}_{}'.format(pInvestorPosition.PositionDate, pInvestorPosition.InstrumentID,
-        #                                      pInvestorPosition.PosiDirection)
-        #     g.position_map[positionName].pInvestorPosition = copy.copy(pInvestorPosition)
-        #     print(positionName)
-        # except Exception as e:
-        #     print(e)
-        # PositionDate是区分是否历史仓的枚举值，‘1’表示当前交易日持仓；‘2’表示是历史仓（昨仓）
-        # 只有上期/能源交易所的合约才可能有PositionDate为‘2’的持仓记录，因为上期/能源区分今仓和昨仓记录，今仓平仓需要单独指定平今仓
-        # PosiDirection用于区分是多头还是空头，’2‘是多头，’3‘是空头
-        # 如：'1_ag2206_2'代表当日持有ag2206，多头
-        # print(pInvestorPosition.InstrumentID)
-        positionDate = ''
-        if pInvestorPosition.PositionDate == '1':
-            positionDate = '今'
-        elif pInvestorPosition.PositionDate == '2':
-            positionDate = '昨'
-        positionDirection = ''
-        if pInvestorPosition.PosiDirection == '2':
-            positionDirection = '多'
-        elif pInvestorPosition.PosiDirection == '3':
-            positionDirection = '空'
-        positionName = '{}_{}_{}'.format(positionDate, pInvestorPosition.InstrumentID, positionDirection)
-        g.position_map[positionName] = positionInfo()
-        g.position_map[positionName].pInvestorPosition = copy.copy(pInvestorPosition)
-        if bIsLast:
-            g.qry_flag = False
-            print('查询持仓成功')
-            print('所有查询已结束！')
-        # print(positionName)
-
-    def OnRspQryInvestorPositionDetail(self, pInvestorPositionDetail, pRspInfo, nRequestID, bIsLast):
-        if pInvestorPositionDetail.Volume == 0:
-            return
-
-        # 如果不是上期所和能源中心，命名为：au2206_多，
-        if pInvestorPositionDetail.ExchangeID != 'SHFE' and pInvestorPositionDetail.ExchangeID != 'INE':
-            positionDirection = ''
-            if pInvestorPositionDetail.Direction == '0':
-                positionDirection = '多'
-            elif pInvestorPositionDetail.Direction == '1':
-                positionDirection = '空'
-            positionDetailName = '{}_{}'.format(pInvestorPositionDetail.InstrumentID, positionDirection)
-
-            # 如果该合约第一次出现，则创建持仓明细类，否则不用，之间添加参数即可
-            if positionDetailName not in g.positionDetail_map.keys():
-                g.positionDetail_map[positionDetailName] = positionDetailInfo()
-            # g.positionDetail_map[positionDetailName].position_list.insert(0, copy.copy(pInvestorPositionDetail))
-            # 在开仓价列表中添加开仓价
-            for i in range(int(pInvestorPositionDetail.Volume)):
-                g.positionDetail_map[positionDetailName].openPrice_list.insert(0,
-                                                                               round(pInvestorPositionDetail.OpenPrice,
-                                                                                     2))
-
-        # 如果是上期所或者能源中心，命名为：昨_au2206_多
-        elif pInvestorPositionDetail.ExchangeID == 'SHFE' or pInvestorPositionDetail.ExchangeID == 'INE':
-            positionDirection = ''
-            if pInvestorPositionDetail.Direction == '0':
-                positionDirection = '多'
-            elif pInvestorPositionDetail.Direction == '1':
-                positionDirection = '空'
-            positionDate = ''
-            # 开仓日期指开仓时的交易日期
-            if pInvestorPositionDetail.OpenDate == g.tradingDay:
-                positionDate = '今'
-            elif pInvestorPositionDetail.OpenDate != g.tradingDay:
-                positionDate = '昨'
-            # print(f'pInvestorPositionDetail.OpenDate:{pInvestorPositionDetail.OpenDate}')
-            # print(f'g.tradingDay:{g.tradingDay}')
-            positionDetailName = '{}_{}_{}'.format(positionDate, pInvestorPositionDetail.InstrumentID,
-                                                   positionDirection)
-            # 如果该合约第一次出现，则创建持仓明细类，否则不用，之间添加参数即可
-            if positionDetailName not in g.positionDetail_map.keys():
-                g.positionDetail_map[positionDetailName] = positionDetailInfo()
-            # g.positionDetail_map[positionDetailName].position_list.insert(0, copy.copy(pInvestorPositionDetail))
-            # print(g.positionDetail_map[positionDetailName].position_list[])
-            for i in range(int(pInvestorPositionDetail.Volume)):
-                g.positionDetail_map[positionDetailName].openPrice_list.insert(0,
-                                                                               round(pInvestorPositionDetail.OpenPrice,
-                                                                                     2))
-        # print(positionDetailName)
-        # print(pInvestorPositionDetail.ExchangeID)
-        # print(len(g.positionDetail_map[positionDetailName].openPrice_list))
-        # print(g.positionDetail_map[positionDetailName].openPrice_list)
-
-    # 报单通知
-    # 当委托状态发生变化时，会被回调。常见委托状态主要有：未知、未成交还在队列中、部分成交还在队列中、完全成交等。
-    # 一次报单，如果数量比较多，一般不会一次全部成交，而是会分多批次成交，
-    # 所以会不断被回调。随着不断回调，每次返回的委托量、成交量、剩余量等数据会不断变更。
-    def OnRtnOrder(self, pOrder):
-        try:
-            # 报单已提交
-            if pOrder.OrderStatus == 'a':
-                # print(pOrder.StatusMsg)
-                print('报单已提交')
-                # try:
-                #     print(type(pOrder.OrderRef))
-                #     g.order_map[str(pOrder.OrderRef)].pOrder = copy.copy(pOrder)
-                #     a = 1
-                #     b = 2
-                # except Exception as e:
-                #     print(e)
-                g.order_map[pOrder.OrderRef].pOrder = copy.copy(pOrder)
-            # 未成交
-            elif pOrder.OrderStatus == '3':
-                # print(pOrder.StatusMsg)
-                print('未成交')
-            # 全部成交
-            elif pOrder.OrderStatus == '0':
-                # print(pOrder.StatusMsg)
-                print('全部成交')
-            # 撤单
-            elif pOrder.OrderStatus == '5':
-                # print(pOrder.OrderStatus)
-                # 被动撤单
-                if pOrder.OrderSubmitStatus == '4':
-                    print('被动撤单')
-                    print(pOrder.StatusMsg)
-                else:
-                    print(pOrder.OrderSubmitStatus)
-                    print('撤单')
-                    print(pOrder.StatusMsg)
-            # 部分成交，还在队列中
-            elif pOrder.OrderStatus == '1':
-                print(pOrder.OrderStatus)
-                print('部分成交，还在队列中')
-            else:
-                print("OnRtnOrder")
-                print("OrderStatus=", pOrder.OrderStatus)
-                print("StatusMsg=", pOrder.StatusMsg)
-        except Exception as e:
-            red_print(e)
-
-    # 报单录入请求响应，基本上成功不会回报，错误会回报, 当前报单者收到的回调
-    def OnRspOrderInsert(self, pInputOrder, pRspInfo, nRequestID, bIsLast):
-        print("OnRspOrderInsert")
-        print("ErrorID=", pRspInfo.ErrorID)
-        print("ErrorMsg=", pRspInfo.ErrorMsg)
-
-    # # 该客户名下所有的链接都会收到的回调
-    # def OnErrRtnOrderInsert(self, pInputOrder, pRspInfo):
-    #     print("OnErrRtnOrderInsert")
-    #     print("ErrorID=", pRspInfo.ErrorID)
-    #     print("ErrorMsg=", pRspInfo.ErrorMsg)
-
-    def OnRtnTrade(self, pTrade):
-        try:
-            # t = Thread(target=writeToTradeLogFile, args=(copy.deepcopy(pTrade),))
-            # t.start()
-            start = time.time()
-            writeToTradeLogFile(pTrade)
-            end = time.time()
-            print(f'花费时间：{start - end}')
-        except Exception as e:
-            red_print(e)
-        # writeToTradeLogFile(pTrade)
-
-    def OnRspQryInstrumentCommissionRate(self, pInstrumentCommissionRate, pRspInfo, nRequestID, bIsLast):
-        try:
-            # print(f'合约名称：{pInstrumentCommissionRate.InstrumentID}')
-            # print(f'开仓手续费率：{pInstrumentCommissionRate.OpenRatioByMoney}')
-            # print(f'开仓手续费：{pInstrumentCommissionRate.OpenRatioByVolume}')
-            # print(f'平仓手续费率：{pInstrumentCommissionRate.CloseRatioByMoney}')
-            # print(f'平仓手续费：{pInstrumentCommissionRate.CloseRatioByVolume}')
-            sec = pInstrumentCommissionRate.InstrumentID
-            # 需要判断section是否存在，如果不存在会报错，option不需要检查是否存在
-            if not g.productInfo.has_section(sec):
-                g.productInfo.add_section(sec)
-
-            # 填写开仓手续费率
-            opt = '开仓手续费率'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.OpenRatioByMoney))
-
-            # 填写开仓手续费
-            opt = '开仓手续费'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.OpenRatioByVolume))
-
-            # 填写平仓手续费率
-            opt = '平仓手续费率'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.CloseRatioByMoney))
-
-            # 填写平仓手续费
-            opt = '平仓手续费'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.CloseRatioByVolume))
-
-            # 填写平今手续费率
-            opt = '平今手续费率'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.CloseTodayRatioByMoney))
-
-            # 填写平今手续费
-            opt = '平今手续费'
-            g.productInfo.set(sec, opt, str(pInstrumentCommissionRate.CloseTodayRatioByVolume))
-
-            # 写入ini文件
-            g.productInfo.write(open(g.productInfo_fileName, "w", encoding='utf-8'))
-
-
-
-
-        except Exception as e:
-            red_print(e)
-
-    # # 报单操作请求响应，当执行ReqOrderAction后有字段填写不对之类的CTP报错则通过此接口返回
-    # def OnRspOrderAction(self, pInputOrderAction, pRspInfo, nRequestID, bIsLast):
-    #     try:
-    #         if pRspInfo.ErrorID != 0 and pRspInfo != None:
-    #             print('报单操作请求失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
-    #         else:
-    #             print('报单操作请求成功！')
-    #     except Exception as e:
-    #         red_print(e)
-
-    # 报单操作错误回报，当执行ReqOrderAction后有字段填写不对之类的CTP报错则通过此接口返回
-    def OnErrRtnOrderAction(self, pOrderAction, pRspInfo):
-        try:
-            if pRspInfo.ErrorID != 0 and pRspInfo != None:
-                print('报单操作请求失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
-            else:
-                print('报单操作请求成功！')
-        except Exception as e:
-            red_print(e)
 
 
 class CTP_T(object):
@@ -440,7 +220,7 @@ class CTP_T(object):
           init_subID()
 
     def connect_to_md(self):
-        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建api实例
+        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建mdapi实例
         self.mduserspi = CFtdcMdSpi(self.mduserapi)  # spi实例
         g.mduserapi = self.mduserapi
         g.mduserspi = self.mduserspi

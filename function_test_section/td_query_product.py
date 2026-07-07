@@ -15,7 +15,7 @@ import Global_Param as g
 from function import *
 
 
-"""实现传递tick数据到策略功能,对应上一级目录下StrategyFloder的stragety1演示策略"""
+"""实现查询产品功能,查询合约乘数以及最小变动价位，查询并保存为con_file下ini文件，后续可以改造为批量定时任务"""
 
 
 # 创建回调接口spi
@@ -157,6 +157,60 @@ class CTraderSpi(tdapi.CThostFtdcTraderSpi):
         # # ReqorderfieldInsert(self.tduserapi)
         # print("send ReqorderfieldInsert ok")
 
+    def OnRspQryProduct(self, pProduct, pRspInfo, nRequestID, bIsLast):
+        # if pRspInfo.ErrorID != 0 and pRspInfo != None:
+        #     print('查询产品失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
+        # else:
+        #     print('查询产品成功！')
+        #     print(f'{pProduct}')
+        # 修改值
+        try:
+            sec = pProduct.ProductID
+            opt = '合约乘数'
+            # 需要判断section是否存在，如果不存在会报错，option不需要检查是否存在
+            if not g.productInfo.has_section(sec):
+                g.productInfo.add_section(sec)
+            g.productInfo.set(sec, opt, str(pProduct.VolumeMultiple))
+
+            opt = '最小变动价位'
+            g.productInfo.set(sec, opt, str(pProduct.PriceTick))
+
+            if bIsLast:
+                g.productInfo.write(open(g.productInfo_fileName, "w", encoding='utf-8'))
+                print('查询产品成功！')
+        except Exception as e:
+            print(e)
+
+        # print('产品名称：{}，交易所名称{}'.format(pProduct.ProductID, pProduct.ExchangeID))
+
+    """*********************************************************************"""
+    def OnRspQryInstrument(self, pInstrument, pRspInfo, nRequestID, bIsLast):
+        """
+         查询合约信息的回调接口
+         参数  pInstrument：为合约信息结构体包含InstrumentID，ExchangeID
+              pRspInfo： 报错信息结构体
+        """
+        # try:
+        #     if pRspInfo.ErrorID != 0 and pRspInfo != None:
+        #         print('查询合约失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
+        #     else:
+        #         print('查询合约成功！')
+        # except Exception as e:
+        #     # 'NoneType' object has no attribute 'ErrorID'
+        #     # 可能是接口转换时有问题，但是影响不大
+        #     # print(e)
+        #     red_print(e)
+        print("合约代码为{}，对应的交易所为{}".format(pInstrument.InstrumentID,pInstrument.ExchangeID))
+
+        g.ExchangeID[pInstrument.InstrumentID] = pInstrument.ExchangeID
+        if bIsLast:
+            with open('../con_file/ExchangeID.json', 'w', newline='\n', encoding='utf-8') as f:
+                # json.dump(ExchangeID, f, ensure_ascii=False)
+                data = json.dumps(g.ExchangeID, indent=4, ensure_ascii=False)
+                f.write(data)
+            print('查询合约完成')
+
+
 
 class CTP_T(object):
     def __init__(self, **kwargs):
@@ -164,7 +218,7 @@ class CTP_T(object):
           init_subID()
 
     def connect_to_md(self):
-        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建api实例
+        self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建mdapi实例
         self.mduserspi = CFtdcMdSpi(self.mduserapi)  # spi实例
         g.mduserapi = self.mduserapi
         g.mduserspi = self.mduserspi
@@ -207,15 +261,51 @@ class CTP_T(object):
         # API启动，init之后就会启动一个内部线程读写，并去连CTP前置
         self.tduserapi.Init()
 
+    def qryInstrument(self):
+        """
+        查询合约对应的交易信息接口，回调接口（OnRspQryInstrument）返回对应合约的交易所代码，产品代码等。
+        """
+        queryFile = tdapi.CThostFtdcQryInstrumentField() # 构建查询接口文件
+        ret=self.tduserapi.ReqQryInstrument(queryFile,0) #只填文件和0参数，对合约进行全量查询
+        if ret == 0:
+            print("查询合约请求成功")
+        else:
+            print("查询合约请求失败")
+            judge_ret(ret)
+            while ret != 0:
+                queryFile = tdapi.CThostFtdcQryInstrumentField()
+                ret = self.tduserapi.ReqQryInstrument(queryFile, 0)
+                print('正在查询合约...')
+                time.sleep(5)
+        time.sleep(1)
+    def queryProduct(self):
+        """
+        查询合约对应的产品信息接口，对应回调接口 OnRspQryProduct，返回合约乘数，最小变动价位等
+        """
+        queryFile = tdapi.CThostFtdcQryProductField()
+        ret =self.tduserapi.ReqQryProduct(queryFile,0)  # 空文件参数查询所有产品
+        if ret == 0:
+            print("查询产品请求成功")
+        else:
+            print("查询产品请求失败")
+            judge_ret(ret)
+            while ret != 0:
+                queryFile = tdapi.CThostFtdcQryProductField()
+                ret = self.tduserapi.ReqQryProduct(queryFile, 0)
+                print('正在查询产品...')
+                time.sleep(5)
+        time.sleep(1)
+
+
+
 
 
 if __name__ == '__main__':
     ctp_T = CTP_T()
-    ctp_T.connect_to_md()
-    time.sleep(3)
     ctp_T.connect_to_td()
     # --- 在这里继续执行你的后续业务代码 ---
-
+    time.sleep(3)
+    ctp_T.queryProduct()
 
     # 你的其他业务逻辑...
 
