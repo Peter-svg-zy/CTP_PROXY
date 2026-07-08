@@ -70,7 +70,7 @@ def insertOrder(code, BSType, price, volume, strategyID=0):
     orderfield.InstrumentID = code
     orderfield.UserID = g.investorID
     orderfield.InvestorID = g.investorID
-    orderfield.LimitPrice = price
+    orderfield.LimitPrice = price # 注意这里传参price必须是 0
     orderfield.VolumeTotalOriginal = volume
 
     # 只有上期所和能源中心有平今平昨，剩下的都是先开先平
@@ -105,11 +105,13 @@ def insertOrder(code, BSType, price, volume, strategyID=0):
 
     # 普通限价单的默认参数
     # 报单价格条件
-    orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_LimitPrice
+    # orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_LimitPrice
+    orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_AnyPrice  # 市价指令,同时LimitPrice = 0，TimeCondition = THOST_FTDC_TC_IOC
     # 触发条件
     orderfield.ContingentCondition = tdapi.THOST_FTDC_CC_Immediately
     # 有效期类型
-    orderfield.TimeCondition = tdapi.THOST_FTDC_TC_GFD
+    # orderfield.TimeCondition = tdapi.THOST_FTDC_TC_GFD
+    orderfield.TimeCondition = tdapi.THOST_FTDC_TC_IOC  # 市价指令参数
     # 成交量类型
     orderfield.VolumeCondition = tdapi.THOST_FTDC_VC_AV
     # 组合投机套保标志
