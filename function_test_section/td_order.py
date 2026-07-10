@@ -77,7 +77,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         """
         # print('订阅合约为：{},最新价格为：{}'.format(pDepthMarketData.InstrumentID, pDepthMarketData.LastPrice))
         # g.dataQueue.put(pDepthMarketData)
-        code = g.subID[0]  # subID里面只有‘rb2610’这一个合约
+        code = g.subID[1]  # subID里面有‘rb2610’,'au2608'
         g.ask_price[code] = pDepthMarketData.AskPrice1
         g.bid_price[code] = pDepthMarketData.BidPrice1
 
@@ -281,7 +281,7 @@ class CTP_T(object):
     def __init__(self, **kwargs):
           g.strategy_map[1] = Stragety1.strategy1()
           # init_subID()
-          g.subID=['T2609'] #仅测试rb2610,T2609合约下单功能
+          g.subID=['T2609', 'au2608'] #仅测试rb2610,T2609,au2068合约下单功能
 
     def connect_to_md(self):
         self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建mdapi实例
@@ -373,9 +373,9 @@ if __name__ == '__main__':
     ctp_T.connect_to_td()
     time.sleep(3)
     # --- 在这里继续执行你的后续业务代码 ---
-    code = g.subID[0]
-    insertOrder(code,bs.buyOpen,2,0)
-
+    code = g.subID[1]
+    #insertOrder(code, bs.buyOpen, 2, 0)
+    insertOrder(code, bs.sellCloseToday,2,0)  # 以上交所为例需要区分平今和平昨
     # 你的其他业务逻辑...
 
     # 保持主线程存活，防止程序直接退出
