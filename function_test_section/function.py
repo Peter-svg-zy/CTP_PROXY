@@ -62,81 +62,83 @@ def save_data(strategy, pDepthMarketData):
     t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onQuote)
     t2.start()
 
-#  *********************下单指令，买开，卖开 ******************************
-def insertOrder(code, BSType, price, volume, strategyID=0):
+# ********************* 下单指令，买开，卖开 ******************************
+def insertOrder(code, BSType, volume, strategyID=0):
     orderfield = tdapi.CThostFtdcInputOrderField()
     orderfield.BrokerID = g.broker_id
     orderfield.ExchangeID = g.ExchangeID[code]
     orderfield.InstrumentID = code
     orderfield.UserID = g.investorID
     orderfield.InvestorID = g.investorID
-    orderfield.LimitPrice = price # 注意这里传参price必须是 0
     orderfield.VolumeTotalOriginal = volume
 
-    # 只有上期所和能源中心有平今平昨，剩下的都是先开先平
-
-    if BSType == 'buyopen':
-        # 买卖方向
+    # 【核心修改】根据买卖方向获取对手价作为限价
+    if BSType in ('buyopen', 'buyclose', 'buyclosetoday'):
+        actual_price = g.ask_price.get(code, 0)   # 字典中没有该code合约时，返回0这个默认值
         orderfield.Direction = tdapi.THOST_FTDC_D_Buy
-        # 组合开平标志
-        orderfield.CombOffsetFlag = '0'
-    elif BSType == 'buyclose':
-        orderfield.Direction = tdapi.THOST_FTDC_D_Buy
-        orderfield.CombOffsetFlag = '1'
-    elif BSType == 'sellopen':
+        if BSType == 'buyopen':
+            orderfield.CombOffsetFlag = '0'
+        elif BSType == 'buyclose':
+            orderfield.CombOffsetFlag = '1'
+        else:
+            orderfield.CombOffsetFlag = tdapi.THOST_FTDC_OF_CloseToday
+    elif BSType in ('sellopen', 'sellclose', 'sellclosetoday'):
+        actual_price = g.bid_price.get(code, 0)
         orderfield.Direction = tdapi.THOST_FTDC_D_Sell
-        orderfield.CombOffsetFlag = '0'
-    elif BSType == 'sellclose':
-        orderfield.Direction = tdapi.THOST_FTDC_D_Sell
-        orderfield.CombOffsetFlag = '1'
-    elif BSType == 'buyclosetoday':
-        orderfield.Direction = tdapi.THOST_FTDC_D_Buy
-        orderfield.CombOffsetFlag = tdapi.THOST_FTDC_OF_CloseToday
-    elif BSType == 'sellclosetoday':
-        orderfield.Direction = tdapi.THOST_FTDC_D_Sell
-        orderfield.CombOffsetFlag = tdapi.THOST_FTDC_OF_CloseToday
+        if BSType == 'sellopen':
+            orderfield.CombOffsetFlag = '0'
+        elif BSType == 'sellclose':
+            orderfield.CombOffsetFlag = '1'
+        else:
+            orderfield.CombOffsetFlag = tdapi.THOST_FTDC_OF_CloseToday
     else:
         print('下单委托类型错误！停止下单！')
-        return
+        return None, None
+
+    # 【安全检查】对手价无效时拒绝发单，防止发出价格为0的废单
+    if actual_price <= 0:
+        print(f'⚠️ {code} 对手价无效({actual_price})，放弃下单！')
+        return None, None
 
     # 当前单号
     orderRef = get_OrderRef()
     orderfield.OrderRef = str(orderRef)
 
-    # 普通限价单的默认参数
-    # 报单价格条件
-    # orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_LimitPrice
-    orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_AnyPrice  # 市价指令,同时LimitPrice = 0，TimeCondition = THOST_FTDC_TC_IOC
+    # 【核心修改】使用对手价限价单替代原市价单（全交易所通用）
+    orderfield.LimitPrice = actual_price
+    orderfield.OrderPriceType = tdapi.THOST_FTDC_OPT_LimitPrice
+    orderfield.TimeCondition = tdapi.THOST_FTDC_TC_GFD
+
     # 触发条件
     orderfield.ContingentCondition = tdapi.THOST_FTDC_CC_Immediately
-    # 有效期类型
-    # orderfield.TimeCondition = tdapi.THOST_FTDC_TC_GFD
-    orderfield.TimeCondition = tdapi.THOST_FTDC_TC_IOC  # 市价指令参数
     # 成交量类型
     orderfield.VolumeCondition = tdapi.THOST_FTDC_VC_AV
     # 组合投机套保标志
     orderfield.CombHedgeFlag = "1"
     # GTD日期
     orderfield.GTDDate = ""
-
     # 最小成交量
     orderfield.MinVolume = 0
     # 强平原因
     orderfield.ForceCloseReason = tdapi.THOST_FTDC_FCC_NotForceClose
     # 自动挂起标志
     orderfield.IsAutoSuspend = 0
+    # 补充必填字段，防止底层C++内存残留随机值导致报错
+    orderfield.StopPrice = 0
+    orderfield.IsSwapOrder = 0
 
     ret = g.tduserapi.ReqOrderInsert(orderfield, 0)
     if ret == 0:
         print('下单成功！')
         g.order_map[str(orderRef)] = orderInfo(orderRef, strategyID)
-        # 报单回报里的报单价格和品种数据不对，所以自己记录数据
-        g.order_map[str(orderRef)].orderPrice = price
+        # 记录实际发出的对手价，便于后续核对成交滑点
+        g.order_map[str(orderRef)].orderPrice = actual_price
         g.order_map[str(orderRef)].instrumentID = code
-        # print(g.order_map)
+        print(f"当前合约 {code} 的交易所代码为: [{g.ExchangeID[code]}]")
     else:
         print('下单失败！')
         judge_ret(ret)
+
     return ret, orderRef
 
 

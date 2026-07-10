@@ -7,25 +7,25 @@ import os
 # simnow
 import pandas as pd
 
-# broker_name = 'simnow模拟'
-# investorID = '264168'
-# password = 'zy20010528@'
-# broker_id = '9999'
-# market_server_front = 'tcp://182.254.243.31:30011'
-# trade_server_front = 'tcp://182.254.243.31:30001'
-# appID = 'simnow_client_test'
-# authcode = '0000000000000000'
-# productInfo_fileName = './con_file/productInfo.ini'
-
-broker_name = 'simnow模拟7*24小时'
+broker_name = 'simnow模拟'
 investorID = '264168'
 password = 'zy20010528@'
 broker_id = '9999'
-market_server_front = 'tcp://182.254.243.31:40011'
-trade_server_front = 'tcp://182.254.243.31:40001'
+market_server_front = 'tcp://182.254.243.31:30011'
+trade_server_front = 'tcp://182.254.243.31:30001'
 appID = 'simnow_client_test'
 authcode = '0000000000000000'
-productInfo_fileName = '../con_file/productInfo.ini'
+productInfo_fileName = './con_file/productInfo.ini'
+
+# broker_name = 'simnow模拟7*24小时'
+# investorID = '264168'
+# password = 'zy20010528@'
+# broker_id = '9999'
+# market_server_front = 'tcp://182.254.243.31:40011'
+# trade_server_front = 'tcp://182.254.243.31:40001'
+# appID = 'simnow_client_test'
+# authcode = '0000000000000000'
+# productInfo_fileName = '../con_file/productInfo.ini'
 
 # broker_name = 'ws'
 # investorID = '02'
@@ -92,6 +92,10 @@ except Exception as e:
 
 # 数据队列
 dataQueue = Queue()
+
+# 买方与卖方对手价格
+ask_price = {}
+bid_price = {}
 
 # 计算数据传送时间
 start = None
