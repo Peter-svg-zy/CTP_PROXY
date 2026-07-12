@@ -1,5 +1,5 @@
 import Global_Param as g
-
+import  datetime
 
 
 # 深度数据
@@ -137,3 +137,43 @@ class positionDetailInfo(object):
         self.strategyID = 0
         self.position_list = []
         self.openPrice_list = []
+
+# k线信息
+class BarData():
+    def __init__(self):
+        self.barType = None
+        self.updateTime = datetime.time()
+        self.instrumentID = ''
+        self.exchangeID = ''
+        self.volume = 0
+        self.openInterest = 0
+
+        self.openPrice = 0
+        self.highPrice = 0
+        self.lowPrice = float('inf')
+        self.closePrice = 0
+
+        # 上一根K线的成交量，用于计算当前K线的成交量
+        self.lastVolume = 0
+
+
+
+
+# k线类型
+class bt():
+    min = 'min'
+    min3 = 'min3'
+    min5 = 'min5'
+    min10 = 'min10'
+    min15 = 'min15'
+    min30 = 'min30'
+    min60 = 'min60'
+    min120 = 'min120'
+    min180 = 'min180'
+    min240 = 'min240'
+
+    day = 'day'
+    week = 'week'
+    month = 'month'
+    season = 'season'
+    year = 'year'

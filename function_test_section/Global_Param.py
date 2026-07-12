@@ -101,6 +101,18 @@ bid_price = {}
 start = None
 end = None
 
+# 需订阅的K线合约和类型
+subKlineID = []
+subKlineType = []
+
+# 所有合约等当前K线字典
+klineMin_map = {}
+
+# K线数据队列
+klineQueue = Queue()
+
+# 记录资源管理器
+process = None
 
 
 

@@ -14,6 +14,7 @@ class strategy1:
     def __init__(self):
         # 策略编号
         self.strategyID = 1
+        self.subKlineType = []
         self.subID=['hc2610','fu2609','au2608']
         self.specific_strategy_map = {}
         for instrumentID in self.subID:
@@ -27,11 +28,15 @@ class strategy1:
 
     class specific_strategy(object):
         def __init__(self, instrumentID):
-            # 策略数据
+            # 策略数据(tick)
             self.market_data = MarketData()
             self.market_data = None
+            # 保存K线数据
+            self.bar_data = None
             # 策略数据锁
             self.market_data_lock = threading.Lock()
+            # K线线程锁
+            self.kline_lock = threading.Lock()
             # 策略合约名称
             self.instrumentID = instrumentID
             #策略开仓信号
