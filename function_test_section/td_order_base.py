@@ -15,7 +15,7 @@ import Global_Param as g
 from function import *
 
 
-"""实现下单功能，非常重要的章节"""
+"""***********实现本地订单库维护，这里的order_map订单库字典不能直接用数据库替代，可以增加线程异步写入********************"""
 
 
 # 创建回调接口spi
@@ -64,8 +64,8 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
             print("订阅合约成功，合约为代码为：{}".format(pSpecificInstrument.InstrumentID))
         if bIsLast:
             print('传送数据至策略模块')
-            t4 = Thread(target=get_data)
-            t4.start()
+            # t4 = Thread(target=get_data)
+            # t4.start()
 
 
 
@@ -76,7 +76,10 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         :return:
         """
         # print('订阅合约为：{},最新价格为：{}'.format(pDepthMarketData.InstrumentID, pDepthMarketData.LastPrice))
-        g.dataQueue.put(pDepthMarketData)
+        # g.dataQueue.put(pDepthMarketData)
+        code = g.subID[1]  # subID里面有‘rb2610’,'au2608'
+        g.ask_price[code] = pDepthMarketData.AskPrice1
+        g.bid_price[code] = pDepthMarketData.BidPrice1
 
 class CTraderSpi(tdapi.CThostFtdcTraderSpi):
     def __init__(self, tduserapi):
@@ -209,13 +212,76 @@ class CTraderSpi(tdapi.CThostFtdcTraderSpi):
                 data = json.dumps(g.ExchangeID, indent=4, ensure_ascii=False)
                 f.write(data)
             print('查询合约完成')
+    # 报单通知
+    # 当委托状态发生变化时，会被回调。常见委托状态主要有：未知、未成交还在队列中、部分成交还在队列中、完全成交等。
+    # 一次报单，如果数量比较多，一般不会一次全部成交，而是会分多批次成交，
+    # 所以会不断被回调。随着不断回调，每次返回的委托量、成交量、剩余量等数据会不断变更。
+    def OnRtnOrder(self, pOrder):              # 此部分内容可以用数据库保存
+        try:
+            # 报单已提交
+            if pOrder.OrderStatus == 'a':
+                print('报单已提交')
+                g.order_map[pOrder.OrderRef].pOrder = copy.copy(pOrder)
+            # 未成交
+            elif pOrder.OrderStatus == '3':
+                # print(pOrder.StatusMsg)
+                print('未成交')
+            # 全部成交
+            elif pOrder.OrderStatus == '0':
+                # print(pOrder.StatusMsg)
+                print('全部成交')
+            # 撤单
+            elif pOrder.OrderStatus == '5':
+                # print(pOrder.OrderStatus)
+                # 被动撤单
+                if pOrder.OrderSubmitStatus == '4':
+                    print('被动撤单')
+                    print(pOrder.StatusMsg)
+                else:
+                    print(pOrder.OrderSubmitStatus)
+                    print('撤单')
+                    print(pOrder.StatusMsg)
+            # 部分成交，还在队列中
+            elif pOrder.OrderStatus == '1':
+                print(pOrder.OrderStatus)
+                print('部分成交，还在队列中')
+            else:
+                print("OnRtnOrder")
+                print("OrderStatus=", pOrder.OrderStatus)
+                print("StatusMsg=", pOrder.StatusMsg)
+        except Exception as e:
+            red_print(e)
+
+    # 报单录入请求响应，基本上成功不会回报，错误会回报, 当前报单者收到的回调
+    def OnRspOrderInsert(self, pInputOrder, pRspInfo, nRequestID, bIsLast):
+        print("OnRspOrderInsert")
+        print("ErrorID=", pRspInfo.ErrorID)
+        print("ErrorMsg=", pRspInfo.ErrorMsg)
+
+    # # 该客户名下所有的链接都会收到的回调
+    # def OnErrRtnOrderInsert(self, pInputOrder, pRspInfo):
+    #     print("OnErrRtnOrderInsert")
+    #     print("ErrorID=", pRspInfo.ErrorID)
+    #     print("ErrorMsg=", pRspInfo.ErrorMsg)
+
+    def OnRtnTrade(self, pTrade):
+        try:
+            start = time.time()
+            writeToTradeLogFile(pTrade)
+            end = time.time()
+            # print(f'花费时间：{start - end}')
+        except Exception as e:
+            red_print(e)
+
+
 
 
 
 class CTP_T(object):
     def __init__(self, **kwargs):
           g.strategy_map[1] = Stragety1.strategy1()
-          init_subID()
+          # init_subID()
+          g.subID=['T2609', 'au2608'] #仅测试rb2610,T2609,au2068合约下单功能
 
     def connect_to_md(self):
         self.mduserapi = mdapi.CThostFtdcMdApi_CreateFtdcMdApi('../con_file/')  # 创建mdapi实例
@@ -302,11 +368,14 @@ class CTP_T(object):
 
 if __name__ == '__main__':
     ctp_T = CTP_T()
-    ctp_T.connect_to_td()
-    # --- 在这里继续执行你的后续业务代码 ---
+    ctp_T.connect_to_md()
     time.sleep(3)
-    ctp_T.queryProduct()
-
+    ctp_T.connect_to_td()
+    time.sleep(3)
+    # --- 在这里继续执行你的后续业务代码 ---
+    code = g.subID[1]
+    #insertOrder(code, bs.buyOpen, 2, 0)
+    insertOrder(code, bs.sellCloseToday,2,0)  # 以上交所为例需要区分平今和平昨
     # 你的其他业务逻辑...
 
     # 保持主线程存活，防止程序直接退出

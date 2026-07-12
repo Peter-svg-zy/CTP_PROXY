@@ -229,7 +229,7 @@ def get_file_name(path, ext):
 def create_tradeLogFile():
     # 遍历所有策略，将所有策略的合约进行合并
     content = ['自然日', '交易日', '时间', '标的', '方向', '委托价', '成交价', '成交量', '平仓盈亏', '手续费']
-    path = './交易流水/'
+    path = '../交易流水/'
     for strategy in g.strategy_map.values():
         for subID in strategy.subID:
             file_name = 'strategy{}_{}.csv'.format(strategy.strategyID, subID)
@@ -326,9 +326,9 @@ def writeToTradeLogFile(pTrade):
     # print(f'手续费：{fee}')
     content = [pTrade.TradeDate, pTrade.TradingDay, pTrade.TradeTime, pTrade.InstrumentID, dirction,
                orderPrice, pTrade.Price, pTrade.Volume, round(profit, 0), fee]
-    write_to_csv('./交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
+    write_to_csv('../交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
 
-    del g.order_map[pTrade.OrderRef]
+    # del g.order_map[pTrade.OrderRef]
 
 
 def red_print(content):
@@ -338,6 +338,50 @@ def red_print(content):
 def del_num(content):
     res = re.sub('\d', '', content)
     return res
+
+def updatePositionDetail(ExchangeID, Direction, InstrumentID, Volume, OpenPrice, OpenDate):
+    # 如果不是上期所和能源中心，命名为：au2206_多，
+    if ExchangeID != 'SHFE' and ExchangeID != 'INE':
+        positionDirection = ''
+        if Direction == '0':
+            positionDirection = '多'
+        elif Direction == '1':
+            positionDirection = '空'
+        positionDetailName = '{}_{}'.format(InstrumentID, positionDirection)
+
+        # 如果该合约第一次出现，则创建持仓明细类，否则不用，直接添加参数即可
+        if positionDetailName not in g.positionDetail_map.keys():
+            g.positionDetail_map[positionDetailName] = positionDetailInfo()
+        # g.positionDetail_map[positionDetailName].position_list.insert(0, copy.copy(pInvestorPositionDetail))
+        # 在开仓价列表中添加开仓价
+        for i in range(int(Volume)):
+            g.positionDetail_map[positionDetailName].openPrice_list.insert(0, round(OpenPrice, 2))
+
+    # 如果是上期所或者能源中心，命名为：昨_au2206_多
+    elif ExchangeID == 'SHFE' or ExchangeID == 'INE':
+        positionDirection = ''
+        if Direction == '0':
+            positionDirection = '多'
+        elif Direction == '1':
+            positionDirection = '空'
+        positionDate = ''
+        # 开仓日期指开仓时的交易日期
+        if OpenDate == g.tradingDay:
+            positionDate = '今'
+        elif OpenDate != g.tradingDay:
+            positionDate = '昨'
+        # print(f'OpenDate:{OpenDate}')
+        # print(f'g.tradingDay:{g.tradingDay}')
+        positionDetailName = '{}_{}_{}'.format(positionDate, InstrumentID,
+                                               positionDirection)
+        # 如果该合约第一次出现，则创建持仓明细类，否则不用，之间添加参数即可
+        if positionDetailName not in g.positionDetail_map.keys():
+            g.positionDetail_map[positionDetailName] = positionDetailInfo()
+        # g.positionDetail_map[positionDetailName].position_list.insert(0, copy.copy(pInvestorPositionDetail))
+        # print(g.positionDetail_map[positionDetailName].position_list[])
+        for i in range(int(Volume)):
+            g.positionDetail_map[positionDetailName].openPrice_list.insert(0, round(OpenPrice, 2))
+
 
 
 # 计算手续费

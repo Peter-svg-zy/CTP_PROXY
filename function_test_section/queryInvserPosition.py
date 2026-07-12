@@ -15,7 +15,7 @@ import Global_Param as g
 from function import *
 
 
-"""***********实现下单功能，通过function文件价的insertOrder实现，下单为市价单成交，此功能学习结束，可以结合量化策略运行********************"""
+"""实现查询持仓明细接口，可以作为定时任务或者触发功能"""
 
 
 # 创建回调接口spi
@@ -273,7 +273,25 @@ class CTraderSpi(tdapi.CThostFtdcTraderSpi):
         except Exception as e:
             red_print(e)
 
+    def OnRspQryInvestorPositionDetail(self, pInvestorPositionDetail, pRspInfo, nRequestID, bIsLast):
+        if pInvestorPositionDetail.Volume == 0:
+            return
+        updatePositionDetail(pInvestorPositionDetail.ExchangeID, pInvestorPositionDetail.Direction,
+                             pInvestorPositionDetail.InstrumentID, pInvestorPositionDetail.Volume,
+                             pInvestorPositionDetail.OpenPrice, pInvestorPositionDetail.OpenDate)
+        try:
+            if bIsLast:
+                # g.endTime = time.time()
+                # print(f'查询持仓明细花费时间：{g.endTime - g.startTime}s')
 
+                # 打印逐笔持仓明细
+                print(g.positionDetail_map)
+                for objName in g.positionDetail_map.keys():
+                    print(objName)
+                    print_object(g.positionDetail_map[objName])
+                pass
+        except Exception as e:
+            red_print(e)
 
 
 
@@ -361,8 +379,37 @@ class CTP_T(object):
                 print('正在查询产品...')
                 time.sleep(5)
         time.sleep(1)
+    def queryInvestPosition(self):
+        """查询持仓明细"""
+        queryFile = tdapi.CThostFtdcQryInvestorPositionField ()
+        ret=self.tduserapi.ReQryInvestorPosition(queryFile,0)
+        if ret == 0:
+            print("查询持仓请求成功")
+        else:
+            print("查询持仓请求失败")
+            judge_ret(ret)
+        while ret != 0:
+            queryFile = tdapi.CThostFtdcQryInvestorPositionField()
+            ret = self.tduserapi.ReQryInvestorPosition(queryFile, 0)
+            print('正在查询持仓..')
+            time.sleep(5)
+        time.sleep(1)
 
-
+    def qryInvestorPositionDetail(self):
+        qryFile = tdapi.CThostFtdcQryInvestorPositionDetailField()
+        # qryFile.BrokerID = g.broker_id
+        ret = self.tduserapi.ReqQryInvestorPositionDetail(qryFile, 0)
+        if ret == 0:
+            print('发送查询持仓明细成功！')
+        else:
+            print('发送查询持仓明细失败！')
+            judge_ret(ret)
+            while ret != 0:
+                qryFile = tdapi.CThostFtdcQryInvestorPositionDetailField()
+                ret = self.tduserapi.ReqQryInvestorPositionDetail(qryFile, 0)
+                print('正在查询持仓明细...')
+                time.sleep(5)
+        time.sleep(1)
 
 
 
