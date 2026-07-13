@@ -35,47 +35,68 @@ def init_subID():
 
 # 获取tick并传递
 def get_tick():
+    """获取tick并传递（已移除诊断打印，增加前置脏数据过滤）"""
     while True:
-        pDepthMarketData = g.tickQueue.get()
-        # 订阅合约成功后会有几个合约名为空的合约，需清理掉
-        if str(pDepthMarketData.InstrumentID) == '':
-            continue
-        # 如果不是7*24小时数据，需要进行数据清理
-        if '7*24' not in g.broker_name:
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            stamp = today + " " + pDepthMarketData.UpdateTime
-            timeArray = time.strptime(stamp, "%Y-%m-%d %H:%M:%S")
-            timeStamp = int(time.mktime(timeArray))
-            now = int(time.time())
-            now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 时间戳之差超过1分钟即认为是无效数据
-            if abs(now - timeStamp) > 60:
-                print(f"marketdata delay : ID:{pDepthMarketData.InstrumentID}, Stamp:{stamp}, Now:{now_time}")
+        try:
+            pDepthMarketData = g.tickQueue.get()
+
+            # 🔑 前置过滤：拦截CTP初始化空包/心跳包，避免进入后续耗时解析
+            update_time = getattr(pDepthMarketData, 'UpdateTime', '')
+            if not update_time or len(str(update_time).strip()) < 5:
                 continue
-        # if pDepthMarketData.InstrumentID == 'FG209':
-        #     g.start = time.time()
-        t3 = Thread(target=distribute_tick, args=(pDepthMarketData,))
-        # print(id(t3))
-        t3.start()
+
+            instrument_id = getattr(pDepthMarketData, 'InstrumentID', '')
+            if not instrument_id:
+                continue
+
+            # 非7*24小时环境进行时间校验
+            if '7*24' not in g.broker_name:
+                try:
+                    raw_time = str(update_time).strip()
+                    clean_time = ''.join(c for c in raw_time if c.isprintable())
+
+                    today = datetime.datetime.now().strftime('%Y-%m-%d')
+                    stamp = f"{today} {clean_time}"
+
+                    timeArray = time.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+                    timeStamp = int(time.mktime(timeArray))
+                    now = int(time.time())
+
+                    # 延迟超过60秒的过期Tick直接丢弃
+                    if abs(now - timeStamp) > 60:
+                        print(f"[WARN] Tick delay: {instrument_id}, Clean={stamp}", flush=True)
+                        continue
+
+                except (ValueError, OverflowError, TypeError):
+                    # 解析失败说明是脏数据，静默跳过
+                    continue
+
+            # ✅ 核心分发（无任何打印，极致性能）
+            distribute_tick(pDepthMarketData)
+
+        except Exception as e:
+            import traceback
+            err = f"[FATAL] get_tick crashed: {repr(e)}\n{traceback.format_exc()}"
+            print(err, flush=True)
+            break
 
 
-# 判断需要给哪些策略传tick，以及哪些合约需要合成min1 K线
 def distribute_tick(pDepthMarketData):
-    # 交易账户登录成功后，传递数据
+    """判断需要给哪些策略传tick，以及哪些合约需要合成min1 K线"""
+    # 交易账户未登录时不处理
     if not g.tdLogin_flag:
         return
+
+    instrument_id = pDepthMarketData.InstrumentID
+
+    # 🔑 直接使用 Global_Param.py 中的全局线程池
     for strategy in g.strategy_map.values():
-        if pDepthMarketData.InstrumentID in strategy.subID:
-            t1 = Thread(target=save_tick, args=(strategy, pDepthMarketData,))
-            t1.start()
+        if instrument_id in strategy.subID:
+            g.save_data_pool.submit(save_tick, strategy, pDepthMarketData)
 
-    # 如果策略订阅了K线
-    if pDepthMarketData.InstrumentID in g.subKlineID:
-        # print('合成K线')
-        t2 = Thread(target=tick_to_Kline, args=(pDepthMarketData,))
-        t2.start()
-        # tick_to_Kline(pDepthMarketData)
-
+    # K线合成同样复用全局线程池
+    if instrument_id in g.subKlineID:
+        g.save_data_pool.submit(tick_to_Kline, pDepthMarketData)
 
 def save_tick(strategy, pDepthMarketData):
     # 上锁
@@ -358,7 +379,7 @@ def get_file_name(path, ext):
 def create_tradeLogFile():
     # 遍历所有策略，将所有策略的合约进行合并
     content = ['自然日', '交易日', '时间', '标的', '方向', '委托价', '成交价', '成交量', '平仓盈亏', '手续费']
-    path = './交易流水/'
+    path = '../交易流水/'
     for strategy in g.strategy_map.values():
         for subID in strategy.subID:
             file_name = 'strategy{}_{}.csv'.format(strategy.strategyID, subID)
@@ -489,7 +510,7 @@ def writeToTradeLogFile(pTrade):
     # print(f'手续费：{fee}')
     content = [pTrade.TradeDate, pTrade.TradingDay, pTrade.TradeTime, pTrade.InstrumentID, dirction,
                orderPrice, pTrade.Price, pTrade.Volume, round(profit, 0), fee]
-    write_to_csv('./交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
+    write_to_csv('../交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
 
     print('写完交易流水')
     # # 打印逐笔持仓明细
@@ -670,11 +691,11 @@ def process_monitor():
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     mem = round(g.process.memory_info().rss / 1024 / 1024, 2)
     content = [now_time, cpu_percent, mem, mem_percent]
-    write_to_csv('./资源占用.csv', 'a', content)
+    write_to_csv('../资源占用.csv', 'a', content)
 
 def initProcessMonitor():
     content = ['当前时间', 'CPU使用（%）', '内存使用（MB）', '内存占用（%）']
-    write_to_csv('./资源占用.csv', 'w', content)
+    write_to_csv('../资源占用.csv', 'w', content)
     pid = os.getpid()
     g.process = psutil.Process(pid)
 

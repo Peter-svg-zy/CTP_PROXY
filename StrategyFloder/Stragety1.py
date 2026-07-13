@@ -15,7 +15,7 @@ class strategy1:
         # 策略编号
         self.strategyID = 1
         self.subKlineType = []
-        self.subID=['hc2610','fu2609','au2608']
+        self.subID=['au2608']
         self.specific_strategy_map = {}
         for instrumentID in self.subID:
             self.specific_strategy_map[instrumentID] = strategy1.specific_strategy(instrumentID) #au2608 : <strategy.....> 合约名：对应策略

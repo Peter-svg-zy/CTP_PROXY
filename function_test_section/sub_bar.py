@@ -308,7 +308,7 @@ class CTP_T(object):
           # g.subID=['T2609', 'au2608'] #仅测试rb2610,T2609,au2068合约下单功能
           create_tradeLogFile()
         # 查询版本
-          print(f'CTP API Version:{tdapi.CThostFtdcTraderApi_GetApiVersion()}')
+        #   print(f'CTP API Version:{tdapi.CThostFtdcTraderApi_GetApiVersion()}')
         # 创建资源占用文件
           initProcessMonitor()
 
@@ -432,9 +432,9 @@ if __name__ == '__main__':
     ctp_T.connect_to_td()
     time.sleep(3)
     # --- 在这里继续执行你的后续业务代码 ---
-    code = g.subID[1]
+    # code = g.subID[1]
     #insertOrder(code, bs.buyOpen, 2, 0)
-    insertOrder(code, bs.sellCloseToday,2,0)  # 以上交所为例需要区分平今和平昨
+    # insertOrder(code, bs.sellCloseToday,2,0)  # 以上交所为例需要区分平今和平昨
     # 你的其他业务逻辑...
 
     # 保持主线程存活，防止程序直接退出

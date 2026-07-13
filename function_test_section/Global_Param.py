@@ -63,7 +63,7 @@ positionDetail_map = {}
 tradingDay = None
 
 # 线程池
-save_data_pool = ThreadPoolExecutor(5)
+save_data_pool = ThreadPoolExecutor(6)
 
 # 其他
 tduserapi = None
@@ -94,6 +94,9 @@ except Exception as e:
 
 # 数据队列
 dataQueue = Queue()
+
+#  新增 Tick 专用队列
+tickQueue = Queue()
 
 # 买方与卖方对手价格
 ask_price = {}

@@ -1,4 +1,4 @@
-# 使用说明，4替换为策略序号
+
 import os
 import sys
 import threading
@@ -15,6 +15,8 @@ from function_test_section.function import *
 PERIOD = 88
 NUM_STD = 2
 TRADE_VOLUME = 1  # 每次交易手数
+# 【内存安全阈值】保留的K线最大行数，足以满足 PERIOD=88 的指标计算需求
+MAX_KLINE_ROWS = PERIOD + 10
 
 
 # 策略2
@@ -23,7 +25,7 @@ class strategy2(object):
     def __init__(self):
         # 订阅的合约
         self.subID = ['rb2610']
-        # 订阅的K线 (Aberration通常使用较长周期，这里保留15分钟线，也可根据需要调整)
+        # 订阅的K线
         self.subKlineType = [bt.min15]
         self.specific_strategy_map = {}
         for instrumentID in self.subID:
@@ -47,10 +49,14 @@ class strategy2(object):
             # 策略状态
             self.position = 0  # 0: 无持仓, 1: 多头, -1: 空头
 
-            # 历史K线数据容器，用于计算指标
+            # 【内存容器】仅用于实时指标计算，会被截断
             self.save_to_csv = pd.DataFrame(
                 columns=['合约名称', '开盘价', '最高价', '最低价', '收盘价', '成交量', '持仓量', '上一刻成交量',
                          '当前时间'])
+
+            # 【新增】本地CSV文件路径及表头写入标志
+            self.csv_path = os.path.join('../实时数据', f'{instrumentID}_bar.csv')
+            self._csv_header_written = os.path.exists(self.csv_path) and os.path.getsize(self.csv_path) > 0
 
         def calculate_bollinger(self, close_series, period, num_std):
             """计算布林带指标"""
@@ -132,10 +138,28 @@ class strategy2(object):
             ]
 
             new_row = pd.DataFrame([data_list], columns=self.save_to_csv.columns)
-            self.save_to_csv = pd.concat([self.save_to_csv, new_row], ignore_index=True)
 
-            # 可选：保存K线到本地CSV
-            # self.save_to_csv.to_csv('../实时数据/{}_bar.csv'.format(self.barData.instrumentID))
+            # ==================== 【新增】全量K线持久化到本地CSV ====================
+            try:
+                # 确保目录存在
+                os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+
+                # 以追加模式写入磁盘，header仅在文件为空/不存在时写入一次
+                new_row.to_csv(
+                    self.csv_path,
+                    mode='a',
+                    header=not self._csv_header_written,
+                    index=False
+                )
+                self._csv_header_written = True
+            except Exception as e:
+                print(f"[警告] K线写入CSV失败: {e}")
+            # ========================================================================
+
+            # 【内存容器】追加新行并执行滑动窗口截断，防止内存无限增长
+            self.save_to_csv = pd.concat([self.save_to_csv, new_row], ignore_index=True)
+            if len(self.save_to_csv) > MAX_KLINE_ROWS:
+                self.save_to_csv = self.save_to_csv.tail(MAX_KLINE_ROWS).reset_index(drop=True)
 
             # 执行策略逻辑 (此时 kline_lock 仍处于锁定状态，保证线程安全)
             self.Aberration()
