@@ -41,6 +41,9 @@ class strategy2(object):
 
             self.save_to_csv = pd.DataFrame(columns=['合约名称', '开盘价', '最高价', '最低价', '收盘价', '成交量', '持仓量','上一刻成交量', '当前时间'])
 
+        def Aberration(self):
+            """Aberration策略的实现，调用function中的insertorder模拟市价单指令进行下单，然后在onbar中调用此函数"""
+            pass
         def onQuote(self):
 
             self.market_data_lock.release()
@@ -57,4 +60,5 @@ class strategy2(object):
                 ignore_index=True)
             self.save_to_csv.to_csv('../实时数据/{}_bar.csv'.format(self.barData.instrumentID))
             self.kline_lock.release_lock()
+            self.Aberration()
 
