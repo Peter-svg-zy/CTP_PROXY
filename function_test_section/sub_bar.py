@@ -16,7 +16,7 @@ import Global_Param as g
 from function import *
 
 
-"""实现查询持仓明细接口，可以作为定时任务或者触发功能"""
+"""实现k线订阅功能"""
 
 
 # 创建回调接口spi
@@ -64,8 +64,8 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         else:
             print("订阅合约成功，合约为代码为：{}".format(pSpecificInstrument.InstrumentID))
         if bIsLast:
-            print('传送数据至策略模块')
-            t4 = Thread(target=get_data)
+            print('传送tick数据至策略模块')
+            t4 = Thread(target=get_tick)
             t4.start()
             print('已开启新线程传递Bar至策略')
             t1 = Thread(target=get_Bar)
@@ -83,7 +83,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
         # code = g.subID[1]  # subID里面有‘rb2610’,'au2608',后续使用一个线程进行数据分发
         # g.ask_price[code] = pDepthMarketData.AskPrice1
         # g.bid_price[code] = pDepthMarketData.BidPrice1
-        g.tickQueue.put(pDepthMarketData)
+        g.tickQueue.put(pDepthMarketData) # 替代dataQueue数据队列
 
 
 class CTraderSpi(tdapi.CThostFtdcTraderSpi):
@@ -158,7 +158,7 @@ class CTraderSpi(tdapi.CThostFtdcTraderSpi):
             print('结算单确认失败\n错误信息为：{}\n错误代码为：{}'.format(pRspInfo.ErrorMsg, pRspInfo.ErrorID))
         else:
             print('结算单确认成功！')
-
+            g.tdLogin_flag = True
         # print("OnRspSettlementInfoConfirm")
         # print("ErrorID=", pRspInfo.ErrorID)
         # print("ErrorMsg=", pRspInfo.ErrorMsg)

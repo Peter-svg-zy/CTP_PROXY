@@ -42,6 +42,8 @@ productInfo_fileName = './con_file/productInfo.ini'
 subID = []
 # 查询信号，用于检查是否查询完成，true代表正在查询
 qry_flag = True
+# 交易账户登录信号，用于检查是否登录成功，True代表登录成功
+tdLogin_flag = False
 
 # 下单必要元素
 frontID = None  # 前置编号

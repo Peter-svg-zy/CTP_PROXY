@@ -6,11 +6,14 @@ import re
 import sys
 import time
 from threading import Thread
+
+import psutil
+
 import Global_Param as g
 from CTP_API import thosttraderapi as tdapi
 from CTP_API import thostmduserapi as mdapi
 from UserStruct import *
-import psutil
+
 
 def init_subID():
     # 遍历所有策略，将所有策略的合约进行合并
@@ -27,12 +30,15 @@ def init_subID():
     for instrumentID in g.subKlineID:
         g.klineMin_map[instrumentID] = BarData()
 
-# 获取数据并传递
-def get_data():
+    # print(g.klineMin_map)
+
+
+# 获取tick并传递
+def get_tick():
     while True:
-        pDepthMarketData = g.dataQueue.get()
+        pDepthMarketData = g.tickQueue.get()
         # 订阅合约成功后会有几个合约名为空的合约，需清理掉
-        if pDepthMarketData.InstrumentID == '':
+        if str(pDepthMarketData.InstrumentID) == '':
             continue
         # 如果不是7*24小时数据，需要进行数据清理
         if '7*24' not in g.broker_name:
@@ -42,45 +48,36 @@ def get_data():
             timeStamp = int(time.mktime(timeArray))
             now = int(time.time())
             now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 时间戳之差超过3分钟即认为是无效数据
-            if abs(now - timeStamp) > 3 * 60:
+            # 时间戳之差超过1分钟即认为是无效数据
+            if abs(now - timeStamp) > 60:
                 print(f"marketdata delay : ID:{pDepthMarketData.InstrumentID}, Stamp:{stamp}, Now:{now_time}")
                 continue
         # if pDepthMarketData.InstrumentID == 'FG209':
         #     g.start = time.time()
-        t3 = Thread(target=distribute_data, args=(pDepthMarketData,))
+        t3 = Thread(target=distribute_tick, args=(pDepthMarketData,))
+        # print(id(t3))
         t3.start()
 
 
-# 判断需要给哪些策略传数据
-def distribute_data(pDepthMarketData):
-    # print('\n获得的数据:{}'.format(pDepthMarketData.InstrumentID))
-    # if pDepthMarketData.InstrumentID == 'm2209':
-    #     print(pDepthMarketData.LastPrice)
-    # print(pDepthMarketData.InstrumentID)
-    # print('''
-    #         订阅合约名称：{}
-    #         最新价格：{}
-    #         最后修改时间：{}
-    #         最后修改毫秒：{}
-    #         现在时间：{}
-    #         '''.format(pDepthMarketData.InstrumentID, pDepthMarketData.LastPrice,
-    #                    pDepthMarketData.UpdateTime, pDepthMarketData.UpdateMillisec,
-    #                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")))
+# 判断需要给哪些策略传tick，以及哪些合约需要合成min1 K线
+def distribute_tick(pDepthMarketData):
+    # 交易账户登录成功后，传递数据
+    if not g.tdLogin_flag:
+        return
     for strategy in g.strategy_map.values():
         if pDepthMarketData.InstrumentID in strategy.subID:
-            t1 = Thread(target=save_data, args=(strategy, pDepthMarketData,))
+            t1 = Thread(target=save_tick, args=(strategy, pDepthMarketData,))
             t1.start()
 
-        # 如果策略订阅了K线
+    # 如果策略订阅了K线
     if pDepthMarketData.InstrumentID in g.subKlineID:
         # print('合成K线')
-        t2 = Thread(target=tick_to_Kline, args=(pDepthMarketData,))  # 不同合约合成不同K线字典
+        t2 = Thread(target=tick_to_Kline, args=(pDepthMarketData,))
         t2.start()
+        # tick_to_Kline(pDepthMarketData)
 
 
-
-def save_data(strategy, pDepthMarketData):
+def save_tick(strategy, pDepthMarketData):
     # 上锁
     instrumentID = pDepthMarketData.InstrumentID
     strategy.specific_strategy_map[instrumentID].market_data_lock.acquire()
@@ -93,6 +90,101 @@ def save_data(strategy, pDepthMarketData):
     t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onQuote)
     t2.start()
 
+
+# tick合成为K线
+def tick_to_Kline(pDepthMarketData):
+    instrumentID = pDepthMarketData.InstrumentID
+    # if instrumentID == 'm2209':
+        # print(pDepthMarketData.UpdateTime + '.' + str(pDepthMarketData.UpdateMillisec))
+        # print(pDepthMarketData.LastPrice)
+
+    st = pDepthMarketData.UpdateTime.split(':')
+    # print(st)
+    # 如果tick的分钟数 等于K线的分钟数，则不是新的分钟线
+    if int(st[1]) == g.klineMin_map[instrumentID].updateTime.minute:
+        newMinitue = False
+    else:
+        newMinitue = True
+
+        # 防止开启程序后第一次推送
+        if g.klineMin_map[instrumentID].instrumentID != '':
+            # print(pDepthMarketData.InstrumentID)
+            # print_object(g.klineMin_map[pDepthMarketData.InstrumentID])
+            # g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
+
+            # 注意Volume字段是累计成交量，所以这个时间段内成交量为该值与上一时间段末成交量的差值
+            # 成交量 = max（当前累计成交 - 上一刻成交， 0）
+            g.klineMin_map[instrumentID].volume = max(pDepthMarketData.Volume - g.klineMin_map[instrumentID].lastVolume, 0)
+            g.klineQueue.put(copy.deepcopy(g.klineMin_map[instrumentID]))
+    # 如果是新1分钟，生成一个新k线变量，CBarData结构体中有OHLC,time等K线字段
+    if newMinitue:
+        g.klineMin_map[instrumentID] = BarData()
+        g.klineMin_map[instrumentID].barType = bt.min
+        g.klineMin_map[instrumentID].instrumentID = instrumentID
+        g.klineMin_map[instrumentID].updateTime = datetime.time(int(st[0]), int(st[1]), 0, 0)
+        g.klineMin_map[instrumentID].volume = 0
+        g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
+        g.klineMin_map[instrumentID].openPrice = pDepthMarketData.LastPrice
+        g.klineMin_map[instrumentID].highPrice = pDepthMarketData.LastPrice
+        g.klineMin_map[instrumentID].lowPrice = pDepthMarketData.LastPrice
+        g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
+
+        g.klineMin_map[instrumentID].lastVolume = pDepthMarketData.Volume
+    else:
+        # 如果不是新1分钟，更新相关数据
+        g.klineMin_map[instrumentID].highPrice = max(g.klineMin_map[instrumentID].highPrice, pDepthMarketData.LastPrice)
+        g.klineMin_map[instrumentID].lowPrice = min(g.klineMin_map[instrumentID].lowPrice, pDepthMarketData.LastPrice)
+        g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
+        # 持仓量
+        g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
+
+
+# 获取K线并传递
+def get_Bar():
+    while True:
+        kline = g.klineQueue.get()
+        # 订阅合约成功后会有几个合约名为空的合约，需清理掉
+        if str(kline.instrumentID) == '':
+            continue
+        # 如果不是7*24小时数据，需要进行数据清理
+        if '7*24' not in g.broker_name:
+            today = datetime.datetime.now().strftime('%Y-%m-%d')
+            stamp = today + " " + str(kline.updateTime)
+            timeArray = time.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+            timeStamp = int(time.mktime(timeArray))
+            now = int(time.time())
+            now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 时间戳之差超过1分钟即认为是无效数据
+            if abs(now - timeStamp) > 60:
+                print(f"marketdata delay : ID:{kline.instrumentID}, Stamp:{stamp}, Now:{now_time}")
+                continue
+        # if kline.InstrumentID == 'FG209':
+        #     g.start = time.time()
+        t3 = Thread(target=distribute_Kline, args=(kline,))
+        # print(id(t3))
+        t3.start()
+
+
+# 判断需要给哪些策略传Kline
+def distribute_Kline(kline):
+    # 交易账户登录成功后，传递数据
+    if not g.tdLogin_flag:
+
+        return
+    for strategy in g.strategy_map.values():
+        if kline.instrumentID in strategy.subID and kline.barType in strategy.subKlineType:
+            t1 = Thread(target=save_Kline, args=(strategy, kline,))
+            t1.start()
+
+
+def save_Kline(strategy, kline):
+    instrumentID = kline.instrumentID
+    strategy.specific_strategy_map[instrumentID].kline_lock.acquire()    # k线数据上锁，k线数据保存使用python字典内存完全够用，目前不需要用到redis
+    strategy.specific_strategy_map[instrumentID].barData = kline
+
+    # 调用策略中的行情事件
+    t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onBar, )
+    t2.start()
 
 # ********************* 下单指令，买开，卖开 ******************************
 def insertOrder(code, BSType, volume, strategyID=0):
@@ -266,7 +358,7 @@ def get_file_name(path, ext):
 def create_tradeLogFile():
     # 遍历所有策略，将所有策略的合约进行合并
     content = ['自然日', '交易日', '时间', '标的', '方向', '委托价', '成交价', '成交量', '平仓盈亏', '手续费']
-    path = '../交易流水/'
+    path = './交易流水/'
     for strategy in g.strategy_map.values():
         for subID in strategy.subID:
             file_name = 'strategy{}_{}.csv'.format(strategy.strategyID, subID)
@@ -301,11 +393,11 @@ def writeToTradeLogFile(pTrade):
         dirction += '平（昨）'
 
     # 计算平仓盈亏
-    # 打印逐笔持仓明细
-    print(g.positionDetail_map)
-    for objName in g.positionDetail_map.keys():
-        print(objName)
-        print_object(g.positionDetail_map[objName])
+    # # 打印逐笔持仓明细
+    # print(g.positionDetail_map)
+    # for objName in g.positionDetail_map.keys():
+    #     print(objName)
+    #     print_object(g.positionDetail_map[objName])
     profit = '平仓盈亏'
     # 开仓
     if pTrade.OffsetFlag == '0':
@@ -397,14 +489,14 @@ def writeToTradeLogFile(pTrade):
     # print(f'手续费：{fee}')
     content = [pTrade.TradeDate, pTrade.TradingDay, pTrade.TradeTime, pTrade.InstrumentID, dirction,
                orderPrice, pTrade.Price, pTrade.Volume, round(profit, 0), fee]
-    write_to_csv('../交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
+    write_to_csv('./交易流水/strategy{}_{}.csv'.format(strategyID, pTrade.InstrumentID), 'a', content)
 
     print('写完交易流水')
-    # 打印逐笔持仓明细
-    print(g.positionDetail_map)
-    for objName in g.positionDetail_map.keys():
-        print(objName)
-        print_object(g.positionDetail_map[objName])
+    # # 打印逐笔持仓明细
+    # print(g.positionDetail_map)
+    # for objName in g.positionDetail_map.keys():
+    #     print(objName)
+    #     print_object(g.positionDetail_map[objName])
 
     # # 全部成交
     # if g.order_map[pTrade.OrderRef].OrderStatus == '0':
@@ -471,6 +563,14 @@ def calculate_Commissionrate(pTrade):
 # 打印类内成员
 def print_object(obj):
     print('\n'.join(['%s:%s' % item for item in obj.__dict__.items()]))
+
+
+def print_object_map(obj_map):
+    # 逐个打印字典中保存的类中的变量
+    print(obj_map)
+    for objName in obj_map.keys():
+        print(objName)
+        print_object(obj_map[objName])
 
 
 # 更新逐笔持仓明细
@@ -563,99 +663,6 @@ def updateTodayPositionDetail(ExchangeID, Direction, OffsetFlag, InstrumentID, V
         for i in range(int(Volume)):
             g.positionDetail_map[positionDetailName].openPrice_list.append(round(OpenPrice, 2))
 
-# 合成K线
-def tick_to_Kline(pDepthMarketData):
-    instrumentID = pDepthMarketData.instrumentID
-    st = pDepthMarketData.UpdateTime.split(':')
-    if int(st[1]) == g.klineMin_map[instrumentID].updateTime.minute:
-        newMinitue = False
-    else:
-        newMinitue = True
-
-        # 防止开启程序后第一次推送
-        if g.klineMin_map[instrumentID].instrumentID != '':
-            # print(pDepthMarketData.InstrumentID)
-            # print_object(g.klineMin_map[pDepthMarketData.InstrumentID])
-            # g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
-
-            # 注意Volume字段是累计成交量，所以这个时间段内成交量为该值与上一时间段末成交量的差值
-            # 成交量 = max（当前累计成交 - 上一刻成交， 0）
-            g.klineMin_map[instrumentID].volume = max(pDepthMarketData.Volume - g.klineMin_map[instrumentID].lastVolume, 0)
-            g.klineQueue.put(copy.deepcopy(g.klineMin_map[instrumentID]))
-    # 如果是新1分钟，生成一个新k线变量，CBarData结构体中有OHLC,time等K线字段
-    if newMinitue:
-        g.klineMin_map[instrumentID] = BarData()
-        g.klineMin_map[instrumentID].barType = bt.min
-        g.klineMin_map[instrumentID].instrumentID = instrumentID
-        g.klineMin_map[instrumentID].updateTime = datetime.time(int(st[0]), int(st[1]), 0, 0)
-        g.klineMin_map[instrumentID].volume = 0
-        g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
-        g.klineMin_map[instrumentID].openPrice = pDepthMarketData.LastPrice
-        g.klineMin_map[instrumentID].highPrice = pDepthMarketData.LastPrice
-        g.klineMin_map[instrumentID].lowPrice = pDepthMarketData.LastPrice
-        g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
-
-        g.klineMin_map[instrumentID].lastVolume = pDepthMarketData.Volume # 记录最新的累计成交量
-    else:
-        # 如果不是新1分钟，更新相关数据
-        g.klineMin_map[instrumentID].highPrice = max(g.klineMin_map[instrumentID].highPrice, pDepthMarketData.LastPrice)
-        g.klineMin_map[instrumentID].lowPrice = min(g.klineMin_map[instrumentID].lowPrice, pDepthMarketData.LastPrice)
-        g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice # 收盘价
-        # 持仓量
-        g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
-
-# 获取K线并传递
-def get_Bar():
-    while True:
-        kline = g.klineQueue.get()
-        # 订阅合约成功后会有几个合约名为空的合约，需清理掉
-        if str(kline.instrumentID) == '':
-            continue
-        # 如果不是7*24小时数据，需要进行数据清理
-        if '7*24' not in g.broker_name:
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            stamp = today + " " + str(kline.updateTime)
-            timeArray = time.strptime(stamp, "%Y-%m-%d %H:%M:%S")
-            timeStamp = int(time.mktime(timeArray))
-            now = int(time.time())
-            now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 时间戳之差超过1分钟即认为是无效数据
-            if abs(now - timeStamp) > 60:
-                print(f"marketdata delay : ID:{kline.instrumentID}, Stamp:{stamp}, Now:{now_time}")
-                continue
-        # if kline.InstrumentID == 'FG209':
-        #     g.start = time.time()
-        t3 = Thread(target=distribute_Kline, args=(kline,))
-        # print(id(t3))
-        t3.start()
-
-
-# 判断需要给哪些策略传Kline
-def distribute_Kline(kline):
-    # 交易账户登录成功后，传递数据
-    if not g.tdLogin_flag:
-
-        return
-    for strategy in g.strategy_map.values():
-        if kline.instrumentID in strategy.subID and kline.barType in strategy.subKlineType:
-            t1 = Thread(target=save_Kline, args=(strategy, kline,))
-            t1.start()
-
-
-def save_Kline(strategy, kline):
-    instrumentID = kline.instrumentID
-
-    strategy.specific_strategy_map[instrumentID].barData = kline
-
-    # 调用策略中的行情事件
-    t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onBar, )
-    t2.start()
-
-
-
-
-
-
 # 记录资源占用情况
 def process_monitor():
     cpu_percent = round(g.process.cpu_percent(None), 2)
@@ -663,10 +670,11 @@ def process_monitor():
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     mem = round(g.process.memory_info().rss / 1024 / 1024, 2)
     content = [now_time, cpu_percent, mem, mem_percent]
-    write_to_csv('../资源占用.csv', 'a', content)
+    write_to_csv('./资源占用.csv', 'a', content)
 
 def initProcessMonitor():
     content = ['当前时间', 'CPU使用（%）', '内存使用（MB）', '内存占用（%）']
-    write_to_csv('../资源占用.csv', 'w', content)
+    write_to_csv('./资源占用.csv', 'w', content)
     pid = os.getpid()
     g.process = psutil.Process(pid)
+

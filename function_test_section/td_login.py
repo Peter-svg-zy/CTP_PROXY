@@ -64,7 +64,7 @@ class CFtdcMdSpi(mdapi.CThostFtdcMdSpi):
             print("订阅合约成功，合约为代码为：{}".format(pSpecificInstrument.InstrumentID))
         if bIsLast:
             print('传送数据至策略模块')
-            t4 = Thread(target=get_data)
+            t4 = Thread(target=get_tick())
             t4.start()
 
 
