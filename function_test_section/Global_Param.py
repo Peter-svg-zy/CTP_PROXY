@@ -9,7 +9,7 @@ import pandas as pd
 
 broker_name = 'simnow模拟'
 investorID = '264168'
-password = 'zy20010528@'
+password = ''
 broker_id = '9999'
 market_server_front = 'tcp://182.254.243.31:30011'
 trade_server_front = 'tcp://182.254.243.31:30001'
@@ -19,7 +19,7 @@ productInfo_fileName = './con_file/productInfo.ini'
 
 # broker_name = 'simnow模拟7*24小时'
 # investorID = '264168'
-# password = 'zy20010528@'
+# password = ''
 # broker_id = '9999'
 # market_server_front = 'tcp://182.254.243.31:40011'
 # trade_server_front = 'tcp://182.254.243.31:40001'
