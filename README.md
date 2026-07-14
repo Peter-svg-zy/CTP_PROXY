@@ -17,3 +17,4 @@ function_test_section:从简单到复杂，通过调用CTP_API接口实现各个
 实时数据：当k线数据传送到策略时，策略进行判断的同时进行本地保存。
 
 
+项目框架参考：https://www.bilibili.com/video/BV1z541117Vd/?spm_id_from=333.337.search-card.all.click&vd_source=4b3bb0f26819d3587dc117e2cf9548f6
