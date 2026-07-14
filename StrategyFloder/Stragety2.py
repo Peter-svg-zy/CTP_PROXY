@@ -12,8 +12,8 @@ from function_test_section.UserStruct import *
 from function_test_section.function import *
 
 # 策略固定参数
-PERIOD = 88
-NUM_STD = 2
+PERIOD = 88 # 窗口内单元数
+NUM_STD = 2 # 标准差
 TRADE_VOLUME = 1  # 每次交易手数
 # 【内存安全阈值】保留的K线最大行数，足以满足 PERIOD=88 的指标计算需求
 MAX_KLINE_ROWS = PERIOD + 10
@@ -26,7 +26,7 @@ class strategy2(object):
         # 订阅的合约
         self.subID = ['rb2610']
         # 订阅的K线
-        self.subKlineType = [bt.min15]
+        self.subKlineType = [bt.min]  # 这里先以1分钟K线为例
         self.specific_strategy_map = {}
         for instrumentID in self.subID:
             self.specific_strategy_map[instrumentID] = strategy2.specific_strategy(instrumentID)

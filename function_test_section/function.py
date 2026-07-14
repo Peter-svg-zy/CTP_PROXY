@@ -25,8 +25,6 @@ def init_subID():
             # 订阅K线ID，用来判断哪些合约需要合并
             g.subKlineID = list(set(g.subKlineID + strategy.subID))
             g.subKlineType = list(set(g.subKlineType + strategy.subKlineType))
-
-        # print(g.subKlineID, g.subKlineType)
     for instrumentID in g.subKlineID:
         g.klineMin_map[instrumentID] = BarData()
 
@@ -39,7 +37,6 @@ def get_tick():
     while True:
         try:
             pDepthMarketData = g.tickQueue.get()
-
             # 🔑 前置过滤：拦截CTP初始化空包/心跳包，避免进入后续耗时解析
             update_time = getattr(pDepthMarketData, 'UpdateTime', '')
             if not update_time or len(str(update_time).strip()) < 5:
@@ -73,7 +70,6 @@ def get_tick():
 
             # ✅ 核心分发（无任何打印，极致性能）
             distribute_tick(pDepthMarketData)
-
         except Exception as e:
             import traceback
             err = f"[FATAL] get_tick crashed: {repr(e)}\n{traceback.format_exc()}"
@@ -86,13 +82,14 @@ def distribute_tick(pDepthMarketData):
     # 交易账户未登录时不处理
     if not g.tdLogin_flag:
         return
-
     instrument_id = pDepthMarketData.InstrumentID
-
+    g.ask_price[instrument_id]=pDepthMarketData.AskPrice1
+    g.bid_price[instrument_id]=pDepthMarketData.BidPrice1
     # 🔑 直接使用 Global_Param.py 中的全局线程池
     for strategy in g.strategy_map.values():
         if instrument_id in strategy.subID:
             g.save_data_pool.submit(save_tick, strategy, pDepthMarketData)
+
 
     # K线合成同样复用全局线程池
     if instrument_id in g.subKlineID:
@@ -102,10 +99,8 @@ def save_tick(strategy, pDepthMarketData):
     # 上锁
     instrumentID = pDepthMarketData.InstrumentID
     strategy.specific_strategy_map[instrumentID].market_data_lock.acquire()
-
     strategy.specific_strategy_map[instrumentID].market_data = copy.copy(pDepthMarketData)
-    # 解锁
-    # strategy.specific_strategy_map[instrumentID].market_data_lock.release()
+
 
     # 调用策略中的行情事件
     t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onQuote)
@@ -137,6 +132,7 @@ def tick_to_Kline(pDepthMarketData):
             # 成交量 = max（当前累计成交 - 上一刻成交， 0）
             g.klineMin_map[instrumentID].volume = max(pDepthMarketData.Volume - g.klineMin_map[instrumentID].lastVolume, 0)
             g.klineQueue.put(copy.deepcopy(g.klineMin_map[instrumentID]))
+            print("合成K线传送到队列,k线收盘价为{}".format(g.klineMin_map[instrumentID].closePrice))
     # 如果是新1分钟，生成一个新k线变量，CBarData结构体中有OHLC,time等K线字段
     if newMinitue:
         g.klineMin_map[instrumentID] = BarData()
@@ -176,11 +172,12 @@ def get_Bar():
             now = int(time.time())
             now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # 时间戳之差超过1分钟即认为是无效数据
-            if abs(now - timeStamp) > 60:
+            if abs(now - timeStamp) > 120:
                 print(f"marketdata delay : ID:{kline.instrumentID}, Stamp:{stamp}, Now:{now_time}")
                 continue
         # if kline.InstrumentID == 'FG209':
         #     g.start = time.time()
+        # print("开始分发策略至k线")
         t3 = Thread(target=distribute_Kline, args=(kline,))
         # print(id(t3))
         t3.start()
@@ -200,10 +197,12 @@ def distribute_Kline(kline):
 
 def save_Kline(strategy, kline):
     instrumentID = kline.instrumentID
+    # print("开始上锁")
     strategy.specific_strategy_map[instrumentID].kline_lock.acquire()    # k线数据上锁，k线数据保存使用python字典内存完全够用，目前不需要用到redis
     strategy.specific_strategy_map[instrumentID].barData = kline
 
     # 调用策略中的行情事件
+    # print("******开始调用k线Onbar*********")
     t2 = Thread(target=strategy.specific_strategy_map[instrumentID].onBar, )
     t2.start()
 

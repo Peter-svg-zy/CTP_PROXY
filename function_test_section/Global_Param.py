@@ -110,7 +110,7 @@ end = None
 subKlineID = []
 subKlineType = []
 
-# 所有合约等当前K线字典
+# 所有合约的当前K线字典
 klineMin_map = {}
 
 # K线数据队列
