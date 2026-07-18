@@ -5,7 +5,7 @@ import threading
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-import  Global_Param as g
+from function_test_section import Global_Param as g
 from function_test_section.UserStruct import *
 
 
@@ -44,7 +44,7 @@ class strategy1:
         def onQuote(self):
            #strategy1.Aberration()
            # print(f'策略1：{self.market_data.InstrumentID}')
-           self.market_data_lock.release_lock()
+           self.market_data_lock.release()
 
 
 

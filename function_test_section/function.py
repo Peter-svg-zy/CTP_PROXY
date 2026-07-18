@@ -9,10 +9,10 @@ from threading import Thread
 
 import psutil
 
-import Global_Param as g
+from function_test_section import Global_Param as g
 from CTP_API import thosttraderapi as tdapi
 from CTP_API import thostmduserapi as mdapi
-from UserStruct import *
+from function_test_section.UserStruct import *
 
 
 def init_subID():
@@ -138,7 +138,21 @@ def tick_to_Kline(pDepthMarketData):
         g.klineMin_map[instrumentID] = BarData()
         g.klineMin_map[instrumentID].barType = bt.min
         g.klineMin_map[instrumentID].instrumentID = instrumentID
+        g.klineMin_map[instrumentID].exchangeID = (
+            getattr(pDepthMarketData, 'ExchangeID', '')
+            or g.ExchangeID.get(instrumentID, '')
+        )
+        g.klineMin_map[instrumentID].actionDay = getattr(pDepthMarketData, 'ActionDay', '')
+        g.klineMin_map[instrumentID].tradingDay = getattr(pDepthMarketData, 'TradingDay', '')
         g.klineMin_map[instrumentID].updateTime = datetime.time(int(st[0]), int(st[1]), 0, 0)
+        raw_action_day = str(g.klineMin_map[instrumentID].actionDay or '').replace('-', '')
+        try:
+            bar_date = datetime.datetime.strptime(raw_action_day, '%Y%m%d').date()
+        except ValueError:
+            bar_date = datetime.date.today()
+        g.klineMin_map[instrumentID].barTime = datetime.datetime.combine(
+            bar_date, g.klineMin_map[instrumentID].updateTime
+        )
         g.klineMin_map[instrumentID].volume = 0
         g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
         g.klineMin_map[instrumentID].openPrice = pDepthMarketData.LastPrice

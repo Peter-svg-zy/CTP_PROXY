@@ -1,0 +1,11 @@
+[mysql]
+enabled = true
+host = 127.0.0.1
+port = 3306
+user = root
+password =
+database = ctp_sys
+table = bar_data
+charset = utf8mb4
+connect_timeout = 3
+

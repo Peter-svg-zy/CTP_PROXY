@@ -2,12 +2,16 @@
 import os
 import sys
 import threading
-import datetime
 
 import pandas as pd
 
-sys.path.append(os.path.dirname(os.path.split(os.getcwd())[0] + r"\ "))
-import Global_Param as g
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from bar_persistence import MySQLBarWriter, resolve_bar_time
+from function_test_section import Global_Param as g
 from function_test_section.UserStruct import *
 from function_test_section.function import *
 
@@ -55,8 +59,11 @@ class strategy2(object):
                          '当前时间'])
 
             # 【新增】本地CSV文件路径及表头写入标志
-            self.csv_path = os.path.join('../实时数据', f'{instrumentID}_bar.csv')
+            self.csv_path = os.path.join(PROJECT_ROOT, '实时数据', f'{instrumentID}_bar.csv')
             self._csv_header_written = os.path.exists(self.csv_path) and os.path.getsize(self.csv_path) > 0
+
+            # MySQL延迟连接写入器：首次收到完整K线时才连接数据库
+            self.mysql_writer = MySQLBarWriter()
 
         def calculate_bollinger(self, close_series, period, num_std):
             """计算布林带指标"""
@@ -126,43 +133,43 @@ class strategy2(object):
             self.market_data_lock.release()
 
         def onBar(self):
-            print('这是策略2 - Aberration')
-            print(f"合约: {self.barData.instrumentID}, 周期: {self.barData.barType}")
-
-            # 将新K线数据追加到 DataFrame
-            data_list = [
-                self.barData.instrumentID, self.barData.openPrice, self.barData.highPrice,
-                self.barData.lowPrice, self.barData.closePrice, self.barData.volume,
-                self.barData.openInterest, self.barData.lastVolume,
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-            ]
-
-            new_row = pd.DataFrame([data_list], columns=self.save_to_csv.columns)
-
-            # ==================== 【新增】全量K线持久化到本地CSV ====================
             try:
-                # 确保目录存在
-                os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+                print('这是策略2 - Aberration')
+                print(f"合约: {self.barData.instrumentID}, 周期: {self.barData.barType}")
 
-                # 以追加模式写入磁盘，header仅在文件为空/不存在时写入一次
-                new_row.to_csv(
-                    self.csv_path,
-                    mode='a',
-                    header=not self._csv_header_written,
-                    index=False
-                )
-                self._csv_header_written = True
-            except Exception as e:
-                print(f"[警告] K线写入CSV失败: {e}")
-            # ========================================================================
+                # CSV沿用原字段结构，“当前时间”改为准确的K线开始时间。
+                bar_time = resolve_bar_time(self.barData)
+                data_list = [
+                    self.barData.instrumentID, self.barData.openPrice, self.barData.highPrice,
+                    self.barData.lowPrice, self.barData.closePrice, self.barData.volume,
+                    self.barData.openInterest, self.barData.lastVolume,
+                    bar_time.strftime("%Y-%m-%d %H:%M:%S")
+                ]
+                new_row = pd.DataFrame([data_list], columns=self.save_to_csv.columns)
 
-            # 【内存容器】追加新行并执行滑动窗口截断，防止内存无限增长
-            self.save_to_csv = pd.concat([self.save_to_csv, new_row], ignore_index=True)
-            if len(self.save_to_csv) > MAX_KLINE_ROWS:
-                self.save_to_csv = self.save_to_csv.tail(MAX_KLINE_ROWS).reset_index(drop=True)
+                try:
+                    os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+                    new_row.to_csv(
+                        self.csv_path,
+                        mode='a',
+                        header=not self._csv_header_written,
+                        index=False
+                    )
+                    self._csv_header_written = True
+                except Exception as exc:
+                    print(f"[警告] K线写入CSV失败: {exc}")
 
-            # 执行策略逻辑 (此时 kline_lock 仍处于锁定状态，保证线程安全)
-            self.Aberration()
+                try:
+                    self.mysql_writer.write(self.barData)
+                except Exception as exc:
+                    # 数据库异常不能影响内存指标计算和交易策略运行。
+                    print(f"[警告] K线写入MySQL失败: {exc}")
 
-            # 释放K线锁
-            self.kline_lock.release()
+                self.save_to_csv = pd.concat([self.save_to_csv, new_row], ignore_index=True)
+                if len(self.save_to_csv) > MAX_KLINE_ROWS:
+                    self.save_to_csv = self.save_to_csv.tail(MAX_KLINE_ROWS).reset_index(drop=True)
+
+                self.Aberration()
+            finally:
+                # 即使CSV、数据库或策略计算异常，也必须释放锁。
+                self.kline_lock.release()

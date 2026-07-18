@@ -12,8 +12,8 @@ from CTP_API import thostmduserapi as mdapi
 from CTP_API import thosttraderapi as tdapi
 from StrategyFloder import Stragety1
 from StrategyFloder import Stragety2
-import Global_Param as g
-from function import *
+from function_test_section import Global_Param as g
+from function_test_section.function import *
 
 
 """实现k线订阅功能"""

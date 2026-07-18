@@ -1,4 +1,4 @@
-import Global_Param as g
+from function_test_section import Global_Param as g
 import  datetime
 
 
@@ -143,6 +143,10 @@ class BarData():
     def __init__(self):
         self.barType = None
         self.updateTime = datetime.time()
+        # K线开始时间及CTP日期字段，供CSV/数据库持久化使用
+        self.barTime = None
+        self.actionDay = ''
+        self.tradingDay = ''
         self.instrumentID = ''
         self.exchangeID = ''
         self.volume = 0
