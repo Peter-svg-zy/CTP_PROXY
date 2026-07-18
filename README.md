@@ -2,7 +2,7 @@
 
 ## 1. 项目简介
 
-CTP_PROXY 是一个基于中国期货市场 CTP API 的 Python 量化交易示例项目，包含行情连接、交易连接、Tick分发、分钟K线合成、策略执行、委托下单、成交记录、持仓查询以及K线持久化等功能。
+基于上期技术 CTP API 的 Python 量化交易示例项目，包含行情连接、交易连接、Tick分发、分钟K线合成、策略执行、委托下单、成交记录、持仓查询以及K线持久化等功能。
 
 项目当前的主要运行链路位于 `function_test_section`，其中 `sub_bar.py` 同时初始化行情和交易接口，并加载 Strategy1、Strategy2。Strategy2 使用实时Tick合成1分钟K线，执行 Aberration（布林带突破）逻辑，同时将完整K线追加到本地CSV并写入MySQL。
 
@@ -61,8 +61,6 @@ CTP_PROXY/
 ├─ pure_test.py                     策略逻辑示例测试
 └─ README.md                        本文档
 ```
-
-注意：项目目录和类名中使用的是 `Stragety` 拼写，例如 `Stragety2.py`，不是常见的 `Strategy2.py`。在未统一修改所有导入前不要直接重命名。
 
 ## 3. 核心运行架构
 
