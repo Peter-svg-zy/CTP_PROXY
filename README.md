@@ -10,7 +10,6 @@
 
 ```text
 操作系统：Windows
-Conda环境：CTP_1
 Python：3.8.10（64位）
 CTP API：项目内置Windows .pyd/.dll及Linux .so
 MySQL：8.0.46
