@@ -107,60 +107,52 @@ def save_tick(strategy, pDepthMarketData):
     t2.start()
 
 
-# tick合成为K线
+# tick合成为K线（修改）
 def tick_to_Kline(pDepthMarketData):
     instrumentID = pDepthMarketData.InstrumentID
-    # if instrumentID == 'm2209':
-        # print(pDepthMarketData.UpdateTime + '.' + str(pDepthMarketData.UpdateMillisec))
-        # print(pDepthMarketData.LastPrice)
 
     st = pDepthMarketData.UpdateTime.split(':')
-    # print(st)
     # 如果tick的分钟数 等于K线的分钟数，则不是新的分钟线
     if int(st[1]) == g.klineMin_map[instrumentID].updateTime.minute:
         newMinitue = False
     else:
         newMinitue = True
+     # 把集合竞价阶段与下一分钟进行融合成一条k线
+    if g.klineMin_map[instrumentID].updateTime.strftime('%H:%M:%S') in ['20:59:00', '08:59:00']:
+        newMinitue = False
 
-        # 防止开启程序后第一次推送
-        if g.klineMin_map[instrumentID].instrumentID != '':
-            # print(pDepthMarketData.InstrumentID)
-            # print_object(g.klineMin_map[pDepthMarketData.InstrumentID])
-            # g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
-
-            # 注意Volume字段是累计成交量，所以这个时间段内成交量为该值与上一时间段末成交量的差值
-            # 成交量 = max（当前累计成交 - 上一刻成交， 0）
-            g.klineMin_map[instrumentID].volume = max(pDepthMarketData.Volume - g.klineMin_map[instrumentID].lastVolume, 0)
-            g.klineQueue.put(copy.deepcopy(g.klineMin_map[instrumentID]))
-            print("合成K线传送到队列,k线收盘价为{}".format(g.klineMin_map[instrumentID].closePrice))
     # 如果是新1分钟，生成一个新k线变量，CBarData结构体中有OHLC,time等K线字段
     if newMinitue:
+        if pDepthMarketData.UpdateTime in ['20:59:00', '08:59:00']:
+            # 如果是集合竞价，
+            openPrice = pDepthMarketData.LastPrice
+            volume = 0
+        else:
+            # 保存前一分钟末的收盘价作为现在的开盘价，以及前一分钟的累计成交量，用于计算当前K线的成交量
+            openPrice = g.klineMin_map[instrumentID].closePrice
+            volume = g.klineMin_map[instrumentID].volume
+
+        # 将前一根K线存放到队列里
+        # 防止开启程序后第一次推送，以及集合竞价不推送
+        if g.klineMin_map[instrumentID].instrumentID != '':
+            # 注意Volume字段是累计成交量，所以这个时间段内成交量为该值与上一时间段末成交量的差值
+            # 成交量 = max（当前累计成交 - 上一刻成交， 0）
+            g.klineMin_map[instrumentID].volume = max(volume - g.klineMin_map[instrumentID].lastVolume,
+                                                      0)
+            g.klineQueue.put(copy.deepcopy(g.klineMin_map[instrumentID]))
+
         g.klineMin_map[instrumentID] = BarData()
         g.klineMin_map[instrumentID].barType = bt.min
         g.klineMin_map[instrumentID].instrumentID = instrumentID
-        g.klineMin_map[instrumentID].exchangeID = (
-            getattr(pDepthMarketData, 'ExchangeID', '')
-            or g.ExchangeID.get(instrumentID, '')
-        )
-        g.klineMin_map[instrumentID].actionDay = getattr(pDepthMarketData, 'ActionDay', '')
-        g.klineMin_map[instrumentID].tradingDay = getattr(pDepthMarketData, 'TradingDay', '')
         g.klineMin_map[instrumentID].updateTime = datetime.time(int(st[0]), int(st[1]), 0, 0)
-        raw_action_day = str(g.klineMin_map[instrumentID].actionDay or '').replace('-', '')
-        try:
-            bar_date = datetime.datetime.strptime(raw_action_day, '%Y%m%d').date()
-        except ValueError:
-            bar_date = datetime.date.today()
-        g.klineMin_map[instrumentID].barTime = datetime.datetime.combine(
-            bar_date, g.klineMin_map[instrumentID].updateTime
-        )
-        g.klineMin_map[instrumentID].volume = 0
+        g.klineMin_map[instrumentID].volume = volume
         g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
-        g.klineMin_map[instrumentID].openPrice = pDepthMarketData.LastPrice
-        g.klineMin_map[instrumentID].highPrice = pDepthMarketData.LastPrice
-        g.klineMin_map[instrumentID].lowPrice = pDepthMarketData.LastPrice
+        g.klineMin_map[instrumentID].openPrice = openPrice
+        g.klineMin_map[instrumentID].highPrice = max(openPrice, pDepthMarketData.LastPrice)
+        g.klineMin_map[instrumentID].lowPrice = min(openPrice, pDepthMarketData.LastPrice)
         g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
 
-        g.klineMin_map[instrumentID].lastVolume = pDepthMarketData.Volume
+        g.klineMin_map[instrumentID].lastVolume = volume
     else:
         # 如果不是新1分钟，更新相关数据
         g.klineMin_map[instrumentID].highPrice = max(g.klineMin_map[instrumentID].highPrice, pDepthMarketData.LastPrice)
@@ -168,6 +160,8 @@ def tick_to_Kline(pDepthMarketData):
         g.klineMin_map[instrumentID].closePrice = pDepthMarketData.LastPrice
         # 持仓量
         g.klineMin_map[instrumentID].openInterest = pDepthMarketData.OpenInterest
+        # 累计成交量
+        g.klineMin_map[instrumentID].volume = pDepthMarketData.Volume
 
 
 # 获取K线并传递
